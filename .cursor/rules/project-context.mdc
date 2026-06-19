@@ -48,3 +48,4 @@ specs/          SDD source of truth (do not skip)
 - Spanish for user-facing strings; English for code identifiers
 - Multi-tenant: always filter by `school_id` from JWT
 - Minimize diff scope; match existing patterns in each app
+- Follow **KISS, DRY, SOLID, YAGNI** and clean code — see `specs/DevelopmentPrinciples.md`

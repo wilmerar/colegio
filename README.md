@@ -34,6 +34,7 @@ Detalle de pantallas por rol: [Architecture.md §9](specs/Architecture.md#9-matr
 | [Openapi.yml](specs/Openapi.yml) | API REST v0.2 |
 | [Testing.md](specs/Testing.md) | BDD y CI |
 | [DefinitionOfDone.md](specs/DefinitionOfDone.md) | Criterios de done |
+| [DevelopmentPrinciples.md](specs/DevelopmentPrinciples.md) | KISS, DRY, SOLID, YAGNI, clean code, design patterns |
 
 ## Estructura de repo (propuesta)
 

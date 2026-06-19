@@ -66,3 +66,5 @@ const dashboard = await api.GET('/parents/dashboard/{studentId}', {
 - Duplicate API types — generate from `specs/Openapi.yml`
 - Allow parent role to render submit-assignment forms
 - Fetch in `useEffect` what a Server Component can load directly
+- Copy validation schemas — import from `packages/shared` (DRY)
+- Build client-side RBAC bypass — always enforce on API too (SOLID/security)

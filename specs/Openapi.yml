@@ -5,8 +5,9 @@ info:
     API REST para plataforma web + móvil de control escolar.
     Enfoque: control parental + tareas estilo Moodle.
     Roles: admin, director, teacher, student, parent.
+    Auth: login local (email/password) + Google OAuth 2.0.
     Derivada de Userstories.md (SDD).
-  version: 0.2.0
+  version: 0.3.0
   contact:
     name: Equipo Colegio
     email: dev@colegio.local
@@ -19,7 +20,7 @@ servers:
 
 tags:
   - name: Auth
-    description: US-020 Autenticación multi-rol (web + móvil)
+    description: US-020 Autenticación local + Google OAuth (web + móvil)
   - name: Admin
     description: US-022 Gestión usuarios y módulos
   - name: Director
@@ -80,6 +81,167 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthLoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Login local deshabilitado en el colegio o cuenta inactiva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/google:
+    post:
+      tags: [Auth]
+      summary: Login con Google ID token
+      description: |
+        El cliente (web/móvil) obtiene un ID token de Google Sign-In y lo envía al API.
+        El servidor verifica el token con `google-auth-library`, busca o vincula
+        `user_oauth_identities` y emite JWT propio.
+        El rol lo define la BD del colegio; Google no asigna rol.
+      operationId: loginWithGoogle
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+      responses:
+        '200':
+          description: Login Google exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResponse'
+        '401':
+          description: ID token inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: |
+            - `GOOGLE_AUTH_DISABLED` — colegio sin Google habilitado
+            - `USER_NOT_INVITED` — email no registrado en el colegio
+            - `EMAIL_DOMAIN_NOT_ALLOWED` — dominio no permitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/google/callback:
+    get:
+      tags: [Auth]
+      summary: Callback OAuth Google (flujo redirect web)
+      description: |
+        Flujo authorization code para portal web. Google redirige aquí con `code`.
+        El servidor intercambia el code por tokens, vincula usuario y redirige al
+        frontend con refresh token en cookie httpOnly o fragmento de URL.
+      operationId: googleOAuthCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          description: CSRF state (incluye school_slug)
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect al frontend con sesión establecida
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Cerrar sesión y revocar refresh token
+      operationId: logout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Sesión revocada
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/link/google:
+    post:
+      tags: [Auth]
+      summary: Vincular cuenta Google a usuario autenticado
+      description: |
+        Usuario ya logueado (local) vincula su cuenta Google para futuros logins OAuth.
+      operationId: linkGoogleAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkGoogleRequest'
+      responses:
+        '201':
+          description: Cuenta Google vinculada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOAuthIdentity'
+        '409':
+          description: Google sub ya vinculado a otro usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      tags: [Auth]
+      summary: Desvincular cuenta Google
+      description: |
+        Requiere contraseña local si `auth_provider` es `google` y no hay password,
+        la cuenta debe tener password configurado antes de desvincular.
+      operationId: unlinkGoogleAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlinkGoogleRequest'
+      responses:
+        '204':
+          description: Google desvinculado
+        '400':
+          description: Debe configurar contraseña local antes de desvincular
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Perfil del usuario autenticado
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Usuario actual con proveedores OAuth vinculados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -1205,10 +1367,17 @@ components:
         role:
           type: string
           enum: [admin, director, teacher, student, parent]
+        auth_provider:
+          type: string
+          enum: [local, google]
+          description: Proveedor principal de registro
         first_name:
           type: string
         last_name:
           type: string
+        email:
+          type: string
+          format: email
         school_id:
           type: string
           format: uuid
@@ -1216,6 +1385,86 @@ components:
           type: string
           format: uuid
           description: Solo presente cuando role=student
+        email_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        last_login_at:
+          type: string
+          format: date-time
+
+    UserOAuthIdentity:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [google]
+        provider_email:
+          type: string
+          format: email
+        avatar_url:
+          type: string
+          format: uri
+        linked_at:
+          type: string
+          format: date-time
+
+    CurrentUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        oauth_identities:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserOAuthIdentity'
+
+    GoogleAuthRequest:
+      type: object
+      required: [id_token, school_slug]
+      properties:
+        id_token:
+          type: string
+          description: Google ID token (JWT) obtenido en cliente via Sign-In SDK
+        school_slug:
+          type: string
+          example: san-miguel
+        device_info:
+          type: object
+          description: Opcional — plataforma móvil para refresh_tokens
+          properties:
+            platform:
+              type: string
+              enum: [web, ios, android]
+            app_version:
+              type: string
+
+    LinkGoogleRequest:
+      type: object
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+          description: Google ID token para vincular
+
+    UnlinkGoogleRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+          description: Contraseña local para confirmar desvinculación
+
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: Token a revocar; si omitido, revoca el de la sesión actual
 
     CreateUserRequest:
       type: object

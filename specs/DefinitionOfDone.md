@@ -26,7 +26,8 @@ Una user story está **Done** cuando se cumplen **todos** los ítems:
 - [ ] Escenario(s) Gherkin ejecutables en verde (Cucumber).
 - [ ] Sin regresiones: suite CI completa en verde.
 
-### 1.4 Calidad
+### 1.4 Calidad de código
+- [ ] Cumple `DevelopmentPrinciples.md` (KISS, DRY, SOLID, YAGNI, clean code).
 - [ ] Sin errores de linter ni type-check.
 - [ ] Sin secretos hardcodeados.
 - [ ] Logs estructurados en operaciones críticas (sin PII sensible).

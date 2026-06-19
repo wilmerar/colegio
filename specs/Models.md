@@ -79,10 +79,14 @@ enum SignatureDocumentType {
   CUSTOM = 'personalizado',
 }
 
-enum GuardianRelationship {
-  FATHER = 'padre',
-  MOTHER = 'madre',
-  GUARDIAN = 'tutor',
+enum AuthProvider {
+  LOCAL = 'local',
+  GOOGLE = 'google',
+}
+
+enum OAuthProvider {
+  GOOGLE = 'google',
+  // Futuro: MICROSOFT = 'microsoft', APPLE = 'apple'
 }
 ```
 
@@ -113,13 +117,16 @@ enum GuardianRelationship {
 | id | UUID | PK |
 | school_id | UUID | FK → School |
 | email | string | Unique por school |
-| password_hash | string | |
+| password_hash | string? | NULL si solo Google OAuth |
+| auth_provider | AuthProvider | `local` \| `google` |
 | first_name | string | |
 | last_name | string | |
 | role | UserRole | admin, director, teacher, student, parent |
 | phone | string? | No expuesto en chat |
 | fcm_token | string? | Push notifications |
 | student_id | UUID? | FK → Student (solo rol student) |
+| email_verified | boolean | true tras OAuth Google verificado |
+| last_login_at | datetime? | |
 | is_active | boolean | |
 | created_at | datetime | |
 
@@ -127,6 +134,21 @@ enum GuardianRelationship {
 - Teacher → Course (M:N via course_teachers)
 - Parent → Student (M:N via guardians)
 - Student user → Student entity (1:1 via student_id)
+- User → UserOAuthIdentity (1:N proveedores)
+
+---
+
+### 2.2b UserOAuthIdentity (Google)
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | UUID | PK |
+| user_id | UUID | FK → User |
+| provider | OAuthProvider | `google` |
+| provider_sub | string | Google `sub` (único global) |
+| provider_email | string? | Email devuelto por Google |
+| avatar_url | string? | Foto de perfil Google |
+| linked_at | datetime | |
 
 ---
 

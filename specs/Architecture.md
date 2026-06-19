@@ -63,9 +63,11 @@ flowchart TB
 2. **Multi-tenant:** Aislamiento por `school_id`.
 3. **API-first, multi-cliente:** Next.js (web) + React Native (móvil) → misma API NestJS.
 4. **TypeScript end-to-end:** Tipos generados desde `Openapi.yml` compartidos en web y móvil.
-4. **LMS módulo central:** Tareas con ciclo Moodle (publish → submit → grade → notify).
-5. **RBAC estricto:** Middleware de rol + ownership (padre→hijo, profesor→curso).
-6. **Event-driven:** Notificaciones push/email vía cola async.
+5. **LMS módulo central:** Tareas con ciclo Moodle (publish → submit → grade → notify).
+6. **RBAC estricto:** Middleware de rol + ownership (padre→hijo, profesor→curso).
+7. **Event-driven:** Notificaciones push/email vía cola async.
+8. **PostgreSQL como fuente de verdad:** Integraciones externas (Google, FCM) son servicios; solo referencias/tokens en BD.
+9. **Clean code & SOLID:** Ver `DevelopmentPrinciples.md` — KISS, DRY, YAGNI en todo el monorepo.
 
 ---
 
@@ -82,16 +84,20 @@ C4Context
   Person(parent, "Padre", "Monitorea hijo")
 
   System(app, "App Colegios", "API + Web + Móvil")
+  System_Ext(google, "Google OAuth 2.0", "Login social")
   System_Ext(fcm, "Firebase FCM", "Push")
   System_Ext(storage, "Object Storage", "Entregas y adjuntos")
+  System_Ext(payments, "Pasarela pagos", "QR pensiones")
 
   Rel(admin, app, "Web")
   Rel(director, app, "Web")
   Rel(teacher, app, "Web + Móvil")
   Rel(student, app, "Web + Móvil")
   Rel(parent, app, "Móvil + Web")
+  Rel(app, google, "OAuth login")
   Rel(app, fcm, "Push")
   Rel(app, storage, "Archivos")
+  Rel(app, payments, "Cobros")
 ```
 
 ---
@@ -153,7 +159,10 @@ pendiente → entregada | entregada_tarde → calificada
 
 ```
 src/
-├── auth/              # US-020 Login web/móvil
+├── auth/              # US-020 Login local + Google OAuth
+│   ├── local/         # email/password
+│   ├── google/        # OAuth 2.0 callback, link account
+│   └── jwt/           # tokens + refresh
 ├── admin/             # US-022 Usuarios y módulos
 ├── director/          # US-023, US-024 Profesores y reportes
 ├── users/
@@ -179,13 +188,24 @@ src/
 | **Backend** | Node.js + **NestJS** + TypeScript | API REST, RBAC, multi-tenant |
 | **Web** | **Next.js 14** (App Router) + TypeScript | Un portal con layouts por rol |
 | **Móvil** | **React Native** + TypeScript + **Expo** | iOS + Android, un codebase |
-| DB | PostgreSQL 16 | |
-| Cache/Colas | Redis + BullMQ | Notificaciones async |
+| **BD principal** | **PostgreSQL 16** | Datos transaccionales, OAuth identities, LMS |
+| Cache/Colas | Redis + BullMQ | Notificaciones async, rate limit |
 | Storage | MinIO / S3 | Entregas, adjuntos, firmas |
-| Auth | JWT + refresh token | Secure storage en móvil |
-| Push | Firebase FCM | `@react-native-firebase/messaging` o Expo Notifications |
+| Auth local | JWT + refresh token | Tabla `refresh_tokens` en PostgreSQL |
+| Auth social | **Google OAuth 2.0** | `@nestjs/passport` + `google-auth-library` |
+| Push | Firebase FCM | Token en `users.fcm_token` |
 | API Spec | OpenAPI 3.1 | Generación de cliente con `openapi-typescript` |
 | Monorepo (opcional) | Turborepo o pnpm workspaces | `apps/api`, `apps/web`, `apps/mobile`, `packages/shared` |
+
+### Por qué PostgreSQL (decisión registrada)
+
+- Dominio **relacional**: colegios, cursos, alumnos, tareas, entregas, asistencia.
+- **Multi-tenant** con `school_id` y Row-Level Security.
+- **Reportes** del director con SQL (JOINs, agregaciones).
+- **Integraciones externas** (Google, FCM, pagos) no reemplazan la BD; guardan referencias en PostgreSQL.
+- Alternativas descartadas para BD principal: MongoDB (peor integridad/reportes), Firestore (no apto para ERP escolar).
+
+**Complementos:** Redis (no reemplaza PostgreSQL), S3 (archivos binarios).
 
 ### Por qué React Native (decisión registrada)
 
@@ -374,9 +394,153 @@ npx openapi-typescript specs/Openapi.yml -o packages/api-client/src/schema.ts
 † Solo `{id}` = propio  
 ‡ Solo `{id}` = hijo vinculado
 
+\* Solo `{id}` = hijo vinculado
+
 ---
 
-## 12. Roadmap frontend
+## 12. Autenticación: local + Google OAuth
+
+### Modelo híbrido
+
+| Método | Quién lo usa | Almacenamiento |
+|--------|--------------|----------------|
+| Email + contraseña | Todos (admin crea cuentas) | `users.password_hash` |
+| Google OAuth | Padres, alumnos, profesores (opcional por colegio) | `user_oauth_identities` |
+
+El **rol** (`admin`, `director`, etc.) lo asigna el colegio en PostgreSQL. Google solo provee identidad (email, nombre, `sub`).
+
+### Flujo Google OAuth (web y móvil)
+
+```mermaid
+sequenceDiagram
+  participant C as Cliente Web/Móvil
+  participant G as Google OAuth
+  participant A as NestJS API
+  participant DB as PostgreSQL
+
+  C->>G: Redirect / Google Sign-In SDK
+  G->>C: ID token o authorization code
+  C->>A: POST /auth/google { id_token, school_slug }
+  A->>G: Verificar token (google-auth-library)
+  A->>DB: Buscar user_oauth_identities por provider_sub
+  alt Ya vinculado
+    DB->>A: user_id + role
+  else Email existe en school_id
+    A->>DB: INSERT user_oauth_identities (vincular)
+  else Sin cuenta
+    A->>C: 403 USER_NOT_INVITED
+  end
+  A->>DB: INSERT refresh_tokens
+  A->>C: { access_token, refresh_token, user }
+```
+
+### Endpoints auth (planificados)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/auth/login` | Email + password + `school_slug` |
+| POST | `/auth/google` | Intercambiar Google ID token por JWT propio |
+| POST | `/auth/refresh` | Renovar access token |
+| POST | `/auth/logout` | Revocar refresh token |
+| POST | `/auth/link/google` | Usuario logueado vincula Google |
+| DELETE | `/auth/link/google` | Desvincular Google (requiere password local) |
+
+### Variables de entorno (API)
+
+```env
+GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxx                    # solo server-side
+GOOGLE_CALLBACK_URL=https://api.../auth/google/callback
+JWT_SECRET=xxx
+JWT_REFRESH_SECRET=xxx
+```
+
+### Configuración por colegio
+
+Admin activa Google en `schools.settings.auth`:
+
+```json
+{
+  "auth": {
+    "google_enabled": true,
+    "local_login_enabled": true,
+    "allowed_email_domains": ["sanmiguel.edu.bo"],
+    "auto_link_by_email": true
+  }
+}
+```
+
+Si `allowed_email_domains` está definido, rechazar Google login con email fuera del dominio.
+
+### Seguridad OAuth
+
+- Validar `aud` (client_id) e `iss` (`accounts.google.com`) del ID token
+- No confiar en email del cliente sin verificar token en servidor
+- Rate limit en `/auth/google` (Redis)
+- Registrar `last_login_at` en `users`
+
+---
+
+## 13. Integraciones externas
+
+| Integración | Fase | Protocolo | Datos en PostgreSQL |
+|-------------|------|-----------|---------------------|
+| **Google OAuth 2.0** | MVP | OIDC / ID token | `user_oauth_identities`, `users` |
+| **Firebase FCM** | MVP | HTTP API | `users.fcm_token` |
+| **Email (SendGrid / Gmail API)** | v1.2 | SMTP / REST | cola en Redis; sin tabla propia MVP |
+| **Google Drive** (opcional) | v2 | Google APIs | URL en `assignments.attachments` JSONB |
+| **Pasarela pagos / QR** | v1.3 | REST banco/wallet | `payments.reference`, `qr_payload` |
+| **Webhooks\*** (chat) | v1.2 | Socket.io | `messages`, `message_threads` |
+
+\* Chat fase v1.2; MVP no requiere WebSocket.
+
+### Diagrama integraciones
+
+```mermaid
+flowchart LR
+  subgraph clients [Clientes]
+    WEB[Next.js]
+    MOB[React Native]
+  end
+
+  subgraph api [NestJS]
+    AUTH[auth module]
+    WORKER[notification worker]
+  end
+
+  subgraph data [Persistencia]
+    PG[(PostgreSQL)]
+    REDIS[(Redis)]
+    S3[(S3)]
+  end
+
+  subgraph external [Servicios externos]
+    GOOGLE[Google OAuth]
+    FCM[Firebase FCM]
+    PAY[Pagos]
+  end
+
+  WEB --> AUTH
+  MOB --> AUTH
+  AUTH --> GOOGLE
+  AUTH --> PG
+  WORKER --> FCM
+  WORKER --> PG
+  api --> S3
+  api --> PAY
+  api --> REDIS
+```
+
+### Principio de integración
+
+1. **PostgreSQL** = estado de negocio (usuarios, tareas, pagos pendientes).
+2. **Servicio externo** = acción (enviar push, verificar OAuth, procesar pago).
+3. **Redis** = cola/eventos; reintentos sin bloquear API.
+4. **S3** = binarios; BD solo guarda URL/referencia.
+
+---
+
+## 14. Roadmap frontend
 
 | Fase | Web (Next.js) | Móvil (React Native) |
 |------|---------------|----------------------|
@@ -387,18 +551,19 @@ npx openapi-typescript specs/Openapi.yml -o packages/api-client/src/schema.ts
 
 ---
 
-## 13. Roadmap backend + producto
+## 15. Roadmap backend + producto
 
 | Fase | Alcance | Stories |
 |------|---------|---------|
-| **MVP** | Auth 5 roles, LMS Moodle, panel padre, asistencia, admin usuarios | US-020–029, US-001–006 |
+| **MVP** | Auth local + **Google OAuth**, LMS, panel padre, asistencia, admin | US-020–029, US-001–006 |
 | **v1.1** | Reportes director, calificaciones, disciplina avanzada | US-023–024, US-013 |
 | **v1.2** | Comunicados, chat, firma digital | US-007+, US-018 |
 | **v1.3** | Pagos, encuestas, offline móvil | Resto |
 
 ---
 
-## 14. Referencias
+## 16. Referencias
 
 - [Moodle](https://moodle.org/) — referencia UX para tareas y entregas
+- [Google OAuth 2.0](https://developers.google.com/identity/protocols/oauth2) — login social
 - Specs: `Userstories.md`, `Models.md`, `Database.md`, `Openapi.yml`

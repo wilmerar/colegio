@@ -1,6 +1,11 @@
 # Database — Esquema PostgreSQL
 
-> Esquema derivado de `Models.md` y `Userstories.md`. Motor: **PostgreSQL 16**. Encoding: UTF-8. Timezone app: UTC; display: `America/La_Paz`.
+> Esquema derivado de `Models.md` y `Userstories.md`.
+>
+> **Motor oficial:** **PostgreSQL 16** — relacional, multi-tenant, reportes, integridad académica.
+> **Complementos:** Redis (colas/cache), S3/MinIO (archivos). Auth social (Google) en capa API; identidades en PostgreSQL.
+>
+> Encoding: UTF-8. Timezone app: UTC; display: `America/La_Paz`.
 
 ---
 
@@ -14,6 +19,22 @@
 | Naming | snake_case, plural para tablas |
 | Multi-tenant | `school_id` en tablas de tenant + índices compuestos |
 | Migraciones | Flyway o Prisma Migrate |
+| Auth externo | Identidades OAuth en `user_oauth_identities`; rol siempre en `users.role` |
+
+---
+
+## 1b. Por qué PostgreSQL (decisión registrada)
+
+| Requisito del proyecto | Soporte en PostgreSQL |
+|------------------------|------------------------|
+| Relaciones padre–alumno–curso–tarea | FK, JOINs, integridad referencial |
+| Multi-tenant por colegio | `school_id` + Row-Level Security |
+| Reportes del director | Agregaciones SQL, export vía API |
+| LMS (entregas, calificaciones) | Transacciones ACID |
+| Integraciones (Google, FCM, pagos) | PostgreSQL = datos; APIs externas = servicios |
+| JSON adjunto/settings | JSONB (`attachments`, `schools.settings`) |
+
+**No usar** Firestore/MongoDB como BD principal: el dominio escolar es relacional por naturaleza.
 
 ---
 
@@ -48,29 +69,98 @@ CREATE TABLE schools (
 
 ```sql
 CREATE TYPE user_role AS ENUM ('admin', 'director', 'teacher', 'student', 'parent');
+CREATE TYPE auth_provider AS ENUM ('local', 'google');
 
 CREATE TABLE users (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id     UUID NOT NULL REFERENCES schools(id),
-  email         CITEXT NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  first_name    VARCHAR(100) NOT NULL,
-  last_name     VARCHAR(100) NOT NULL,
-  role          user_role NOT NULL,
-  phone         VARCHAR(20),
-  fcm_token     TEXT,
-  student_id    UUID,
-  is_active     BOOLEAN NOT NULL DEFAULT true,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id       UUID NOT NULL REFERENCES schools(id),
+  email           CITEXT NOT NULL,
+  password_hash   VARCHAR(255),              -- NULL si solo OAuth Google
+  auth_provider   auth_provider NOT NULL DEFAULT 'local',
+  first_name      VARCHAR(100) NOT NULL,
+  last_name       VARCHAR(100) NOT NULL,
+  role            user_role NOT NULL,
+  phone           VARCHAR(20),
+  fcm_token       TEXT,
+  student_id      UUID,
+  email_verified  BOOLEAN NOT NULL DEFAULT false,
+  is_active       BOOLEAN NOT NULL DEFAULT true,
+  last_login_at   TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (school_id, email),
   CHECK (
     (role = 'student' AND student_id IS NOT NULL) OR
     (role != 'student')
+  ),
+  CHECK (
+    (auth_provider = 'local' AND password_hash IS NOT NULL) OR
+    (auth_provider = 'google')
   )
 );
 
 CREATE INDEX idx_users_school_role ON users (school_id, role);
+CREATE INDEX idx_users_school_email ON users (school_id, email);
+```
+
+### 3.2b user_oauth_identities (Google y futuros proveedores)
+
+Vincula cuentas externas con `users`. Un usuario puede tener login local **y** Google vinculado.
+
+```sql
+CREATE TYPE oauth_provider AS ENUM ('google');  -- ampliar: 'microsoft', 'apple'
+
+CREATE TABLE user_oauth_identities (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider        oauth_provider NOT NULL,
+  provider_sub    VARCHAR(128) NOT NULL,       -- Google `sub` (estable, único global)
+  provider_email  CITEXT,
+  avatar_url      TEXT,
+  linked_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (provider, provider_sub),
+  UNIQUE (user_id, provider)
+);
+
+CREATE INDEX idx_oauth_user ON user_oauth_identities (user_id);
+```
+
+**Reglas de vinculación (aplicar en servicio auth):**
+
+| Caso | Acción |
+|------|--------|
+| Google email existe en el colegio (`school_id`) | Vincular `provider_sub` al `users` existente |
+| Google email nuevo, admin pre-registró usuario | Vincular y activar cuenta |
+| Google email desconocido | Rechazar o cola de invitación (config por colegio) |
+| Rol del usuario | **Siempre** lo define `users.role`; Google no asigna rol |
+
+### 3.2c refresh_tokens (JWT)
+
+```sql
+CREATE TABLE refresh_tokens (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash    VARCHAR(255) NOT NULL UNIQUE,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  revoked_at    TIMESTAMPTZ,
+  device_info   JSONB,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id) WHERE revoked_at IS NULL;
+```
+
+### 3.2d Configuración OAuth en schools.settings (JSONB)
+
+```json
+{
+  "auth": {
+    "google_enabled": true,
+    "local_login_enabled": true,
+    "allowed_email_domains": ["sanmiguel.edu.bo"],
+    "auto_link_by_email": true
+  }
+}
 ```
 
 ### 3.3 courses
@@ -558,3 +648,29 @@ INSERT INTO schools (slug, name, entry_time) VALUES
 | Audit logs | Retención 2 años |
 | Mensajes chat | Retención mientras alumno activo + 1 año |
 | Firmas | Retención 5 años (valor legal) |
+| Refresh tokens | Purga automática al expirar o revocar |
+| OAuth identities | Conservar mientras `users.is_active = true` |
+
+---
+
+## 21. Stack de datos e integraciones (resumen)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    NestJS API                            │
+├──────────────┬──────────────┬───────────────────────────┤
+│ PostgreSQL   │ Redis        │ S3 / MinIO                 │
+│ (datos)      │ (colas/cache)│ (archivos)                 │
+└──────────────┴──────────────┴───────────────────────────┘
+         ▲              ▲
+         │              └── BullMQ → FCM, email
+         │
+    users, user_oauth_identities, assignments, …
+
+Externos (sin BD propia en MVP):
+  Google OAuth 2.0  → login / vincular cuenta
+  Firebase FCM      → push (token en users.fcm_token)
+  Pasarela pagos    → referencia en payments.qr_payload
+```
+
+Ver detalle de flujos en `Architecture.md` §15.

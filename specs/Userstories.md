@@ -558,7 +558,7 @@ Feature: Boletín de calificaciones
 
 | User Story | Endpoints principales |
 |------------|----------------------|
-| US-020 | `POST /auth/login` |
+| US-020 | `POST /auth/login`, `POST /auth/google`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST/DELETE /auth/link/google` |
 | US-021 | `POST /students/{id}/guardians` |
 | US-022 | `CRUD /admin/users`, `PATCH /admin/modules` |
 | US-023 | `POST /director/teachers/assignments` |

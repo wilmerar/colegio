@@ -79,3 +79,6 @@ throw new BadRequestException({
 - Put secrets in code; use env vars
 - Expose `password_hash`, internal IDs cross-tenant
 - Skip OpenAPI update when adding endpoints
+- Duplicate business rules in controllers or frontend (DRY → service layer)
+- Add abstractions for single-use cases (KISS/YAGNI)
+- Use empty catch blocks or generic `throw new Error()` (clean code)

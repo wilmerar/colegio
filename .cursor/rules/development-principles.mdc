@@ -1,0 +1,42 @@
+---
+description: KISS, DRY, SOLID, YAGNI and clean code — always apply
+alwaysApply: true
+---
+
+# Development Principles
+
+Full guide: `specs/DevelopmentPrinciples.md`
+
+## KISS
+- Simplest solution that works. One NestJS module per domain. Thin controllers.
+- No abstractions for a single use case. No Redux if React Query suffices.
+
+## DRY
+- **Single sources:** `Openapi.yml`, `packages/shared`, NestJS services (business rules once).
+- Never copy enums, validation, or RBAC logic into web/mobile — import from shared or API.
+- UI may differ web vs mobile; shared logic goes in hooks/services.
+
+## SOLID (practical)
+- **S:** Controller = HTTP; Service = rules; Repository = DB.
+- **O:** Extend via interfaces (OAuthProvider, NotificationSender), not by editing core classes.
+- **D:** Inject repositories and external adapters; no `new PrismaClient()` inside services.
+
+## YAGNI
+- Build only what `specs/Userstories.md` and current roadmap require.
+- No microservices, GraphQL, CQRS, or extra OAuth providers until spec says so.
+- MVP: auth, LMS, parent dashboard, attendance, admin users.
+
+## Clean Code
+- Meaningful names: `submissionStatus`, not `flag`. Functions ≤ ~30 lines.
+- Typed errors with codes (`USER_NOT_INVITED`), never empty catch blocks.
+- Comments explain **why**, not what. No `console.log` — use NestJS Logger.
+- Spanish for UI strings; English for code identifiers.
+
+## Patterns to use
+Repository, DTO, Guard/Decorator, Strategy (OAuth/notifications), Domain Events → BullMQ, Facade (parent dashboard), Adapter (Google/FCM/S3).
+
+## Patterns to avoid (now)
+Over-abstracted factories, manual singletons, speculative layers.
+
+## Pre-PR
+Story traced? OpenAPI sync? RBAC checked? Business rule tests? KISS over cleverness.
