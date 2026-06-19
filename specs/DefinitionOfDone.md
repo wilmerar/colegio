@@ -160,21 +160,22 @@ Estos casos **no** cumplen DoD aunque "funcione en dev":
 
 ## 8. Plantilla de cierre de story (PR description)
 
+GitHub auto-carga `.github/pull_request_template.md` al abrir un PR.
+
+Versión corta (copiar si hace falta):
+
 ```markdown
-## User Story
-US-XXX: [Título]
+## Summary
+US-XXX: [Título] — [1–2 oraciones del cambio]
 
-## Gherkin verificado
-- [ ] Escenario 1: [nombre]
-- [ ] Escenario 2: [nombre]
+## Pre-PR checklist
+- [ ] User story en `specs/Userstories.md`
+- [ ] OpenAPI / DB migration (si aplica)
+- [ ] KISS, DRY, YAGNI (`DevelopmentPrinciples.md`)
+- [ ] RBAC + multi-tenant (`school_id`)
+- [ ] Tests unit + integration; CI verde
 
-## Checklist DoD
-- [ ] OpenAPI actualizado
-- [ ] Tests unit + integration
-- [ ] Cucumber feature en verde
-- [ ] RBAC verificado
-- [ ] Demo en staging
-
-## Screenshots / evidencia
-(adjuntar si hay UI)
+## Test plan
+- [ ] Manual: ...
+- [ ] Automated: ...
 ```

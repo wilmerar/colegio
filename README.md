@@ -35,6 +35,7 @@ Detalle de pantallas por rol: [Architecture.md §9](specs/Architecture.md#9-matr
 | [Testing.md](specs/Testing.md) | BDD y CI |
 | [DefinitionOfDone.md](specs/DefinitionOfDone.md) | Criterios de done |
 | [DevelopmentPrinciples.md](specs/DevelopmentPrinciples.md) | KISS, DRY, SOLID, YAGNI, clean code, design patterns |
+| [pull_request_template.md](.github/pull_request_template.md) | Checklist Pre-PR para GitHub |
 
 ## Estructura de repo (propuesta)
 
