@@ -1,57 +1,38 @@
 # Colegio — Control Escolar Web + Móvil
 
-Plataforma para colegios en El Alto, centrada en **control parental** y **tareas estilo [Moodle](https://moodle.org/)**.
+Documentación organizada en **[`docs/`](docs/README.md)** (estilo numerado + user stories por archivo).
 
-## Stack oficial
+## Quick links
 
-| Capa | Tecnología |
-|------|------------|
-| Backend | **Node.js + NestJS** + TypeScript |
-| Web | **Next.js 14** + TypeScript |
-| Móvil | **React Native + Expo** + TypeScript |
-| API | OpenAPI → tipos compartidos |
+| | |
+|--|--|
+| **User stories** | [`docs/user-stories/`](docs/user-stories/README.md) |
+| Overview | [`docs/01-overview.md`](docs/01-overview.md) |
+| Architecture | [`docs/02-architecture.md`](docs/02-architecture.md) |
+| Dev principles | [`docs/03-development-principles.md`](docs/03-development-principles.md) |
+| Database | [`docs/04-database.md`](docs/04-database.md) |
+| API | [`docs/06-api-openapi.yml`](docs/06-api-openapi.yml) |
+| Testing | [`docs/07-testing.md`](docs/07-testing.md) |
+| Pre-PR | [`.github/pull_request_template.md`](.github/pull_request_template.md) |
 
-## Roles y plataforma
+## Stack
 
-| Rol | Web | Móvil |
-|-----|:---:|:-----:|
-| Administrador | ✓ | — |
-| Director | ✓ | — |
-| Profesor | ✓ | ✓ |
-| Alumno | ✓ | ✓ |
-| Padre | ✓ | ✓ (principal) |
+Node.js · NestJS · Next.js · React Native · PostgreSQL · Google OAuth
 
-Detalle de pantallas por rol: [Architecture.md §9](specs/Architecture.md#9-matriz-de-pantallas-por-rol-y-plataforma)
-
-## Documentación SDD
-
-| Archivo | Contenido |
-|---------|-----------|
-| [Userstories.md](specs/Userstories.md) | User stories + Gherkin |
-| [Architecture.md](specs/Architecture.md) | Stack, pantallas web/móvil, monorepo |
-| [Models.md](specs/Models.md) | Entidades y DTOs |
-| [Database.md](specs/Database.md) | PostgreSQL DDL |
-| [Openapi.yml](specs/Openapi.yml) | API REST v0.2 |
-| [Testing.md](specs/Testing.md) | BDD y CI |
-| [DefinitionOfDone.md](specs/DefinitionOfDone.md) | Criterios de done |
-| [DevelopmentPrinciples.md](specs/DevelopmentPrinciples.md) | KISS, DRY, SOLID, YAGNI, clean code, design patterns |
-| [pull_request_template.md](.github/pull_request_template.md) | Checklist Pre-PR para GitHub |
-
-## Estructura de repo (propuesta)
+## Estructura
 
 ```
 colegio/
-├── apps/api/       # NestJS
-├── apps/web/       # Next.js
-├── apps/mobile/    # React Native + Expo
-├── packages/shared/
-└── specs/
+├── docs/                    ← documentación SDD
+│   ├── 01-overview.md
+│   ├── 02-architecture.md
+│   ├── …
+│   └── user-stories/        ← US-001, US-020, US-T01, …
+├── .github/
+├── .cursor/rules/
+└── specs/                   ← legacy (ver docs/)
 ```
 
-## MVP
+## MVP stories
 
-- Auth 5 roles
-- LMS Moodle (publicar → entregar → calificar)
-- Panel de control parental (móvil first)
-- Asistencia con push
-- Admin usuarios (solo web)
+US-001–006, US-020–029, US-T01–T02 — ver [índice](docs/user-stories/README.md).

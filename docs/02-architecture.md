@@ -225,8 +225,7 @@ colegio/
 ├── packages/
 │   ├── shared/              # Tipos, validadores, constantes
 │   └── api-client/          # Cliente generado desde Openapi.yml
-└── specs/          # legacy — prefer docs/
-docs/           # SDD source of truth
+└── specs/                   # SDD (este proyecto)
 ```
 
 ### Web — Next.js: layouts por rol
@@ -567,4 +566,4 @@ flowchart LR
 
 - [Moodle](https://moodle.org/) — referencia UX para tareas y entregas
 - [Google OAuth 2.0](https://developers.google.com/identity/protocols/oauth2) — login social
-- Specs SDD: `docs/` — ver [docs/README.md](../docs/README.md)
+- Specs: `Userstories.md`, `Models.md`, `Database.md`, `Openapi.yml`

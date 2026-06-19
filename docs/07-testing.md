@@ -27,7 +27,7 @@
 
 ## 2. Unit tests — adding tests for new code
 
-Full guide: `docs/07-testing.md` §2 · Stories: [US-T01](../docs/user-stories/US-T01-unit-tests-codigo-nuevo.md), [US-T02](../docs/user-stories/US-T02-pre-pr-checklist.md)
+> **Rule:** Every PR with new business logic must include unit tests. No unit test → no merge (except trivial config/docs-only changes).
 
 ### 2.1 When unit tests are required
 

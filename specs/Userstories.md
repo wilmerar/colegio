@@ -1,14 +1,18 @@
-# User Stories — Aplicación de Colegios (El Alto)
+> **Producto:** Ver [`docs/01-overview.md`](../docs/01-overview.md) y [`docs/user-stories/`](../docs/user-stories/README.md).
 
-> **Producto:** Plataforma **web + móvil** para control escolar centrada en:
-> 1. **Control del alumno por parte de los padres** (asistencia, tareas, calificaciones, disciplina).
-> 2. **Asignación y seguimiento de tareas estilo [Moodle](https://moodle.org/)** (publicar, entregar, calificar, feedback).
->
-> **Referencia LMS:** Moodle — cursos, tareas con fecha límite, entregas de alumnos, calificación y retroalimentación del docente.
+> Las user stories están en **`docs/user-stories/`** (un archivo por US). Este archivo es índice legacy.
 
 ---
 
-## Roles de usuario (4 niveles)
+## Índice → docs/user-stories/
+
+Ver [docs/user-stories/README.md](../docs/user-stories/README.md) para la lista completa.
+
+**MVP:** US-001–006, US-020–029 · **Ingeniería:** US-T01, US-T02
+
+---
+
+## Contenido legacy (consolidado abajo)
 
 | Nivel | Rol | Plataforma principal | Responsabilidades |
 |-------|-----|---------------------|-------------------|

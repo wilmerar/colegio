@@ -9,9 +9,10 @@
 ## Pre-PR checklist
 
 ### Spec & traceability
-- [ ] Linked to `specs/Userstories.md` (US-XXX)
-- [ ] `Openapi.yml` updated (if API changed)
-- [ ] `Database.md` / migration added (if schema changed)
+- [ ] Linked to `docs/user-stories/US-XXX-*.md`
+- [ ] [US-T02](docs/user-stories/US-T02-pre-pr-checklist.md) Pre-PR checklist
+- [ ] `docs/06-api-openapi.yml` updated (if API changed)
+- [ ] `docs/04-database.md` / migration (if schema changed)
 
 ### Code quality
 - [ ] KISS / DRY / YAGNI — no unnecessary abstractions or duplication
@@ -24,16 +25,10 @@
 - [ ] Parent cannot submit assignments / cross-tenant blocked
 
 ### Tests
-- [ ] Unit tests for new business rules (see below)
+- [ ] [US-T01](docs/user-stories/US-T01-unit-tests-codigo-nuevo.md) — unit tests for new logic
+- [ ] Happy path + error/edge case; Gherkin US-XXX covered
 - [ ] Integration test for new/changed endpoints
-- [ ] CI green
-
-#### Unit tests (required for new logic)
-- [ ] Added/updated `*.service.spec.ts` (or `*.guard.spec.ts` / `packages/shared/*.spec.ts`)
-- [ ] Happy path **+** at least one error or edge case per new method
-- [ ] Maps to Gherkin scenario **US-XXX**
-- [ ] Mocks at repo/adapter boundary — no real DB or external APIs
-- [ ] `pnpm test:unit` passes; service coverage ≥ 80%
+- [ ] CI green; coverage ≥ 80% services
 
 <!-- List new test files:
 - apps/api/src/.../foo.service.spec.ts — describes what is covered
