@@ -1,0 +1,1542 @@
+openapi: 3.1.0
+info:
+  title: App Colegios API
+  description: |
+    API REST para aplicación de comunicación escuela–familia.
+    Derivada de Userstories.md (SDD). Multi-tenant por colegio.
+  version: 0.1.0
+  contact:
+    name: Equipo Colegio
+    email: dev@colegio.local
+
+servers:
+  - url: https://api.colegio.local/v1
+    description: Producción
+  - url: http://localhost:3000/v1
+    description: Desarrollo local
+
+tags:
+  - name: Auth
+    description: US-020 Autenticación multi-rol
+  - name: Students
+    description: US-021 Vinculación padre-alumno
+  - name: Attendance
+    description: US-001, US-002, US-014 Asistencia y salida segura
+  - name: Assignments
+    description: US-003, US-004 Agenda de tareas
+  - name: Discipline
+    description: US-005, US-006 Cuaderno de disciplina
+  - name: Announcements
+    description: US-007, US-008 Comunicados y circulares
+  - name: Calendar
+    description: US-009 Calendario escolar
+  - name: Messages
+    description: US-010, US-011 Chat seguro
+  - name: Payments
+    description: US-012 Control de pagos
+  - name: Grades
+    description: US-013 Boletín de calificaciones
+  - name: Galleries
+    description: US-015 Galería de actividades
+  - name: Directory
+    description: US-016 Directorio escolar
+  - name: Polls
+    description: US-017 Encuestas y votaciones
+  - name: Signatures
+    description: US-018, US-019 Firma digital
+  - name: Files
+    description: Subida de adjuntos
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión (US-020)
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthLoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renovar access token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token renovado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /students/{studentId}/guardians:
+    post:
+      tags: [Students]
+      summary: Vincular padre con alumno (US-021)
+      operationId: linkGuardian
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkGuardianRequest'
+      responses:
+        '201':
+          description: Vinculación creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardian'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /courses/{courseId}/students:
+    get:
+      tags: [Students]
+      summary: Listar alumnos de un curso
+      operationId: listCourseStudents
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: Lista de alumnos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Student'
+
+  /attendance:
+    post:
+      tags: [Attendance]
+      summary: Registrar entrada/asistencia (US-001)
+      operationId: recordAttendance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAttendanceRequest'
+      responses:
+        '201':
+          description: Asistencia registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Attendance]
+      summary: Consultar asistencia (US-002)
+      operationId: getAttendance
+      parameters:
+        - name: student_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Resumen e historial de asistencia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSummaryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /attendance/checkout:
+    post:
+      tags: [Attendance]
+      summary: Marcar salida del alumno (US-014)
+      operationId: recordCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '200':
+          description: Salida registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceRecord'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /courses/{courseId}/assignments:
+    post:
+      tags: [Assignments]
+      summary: Publicar tarea (US-003)
+      operationId: createAssignment
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssignmentRequest'
+      responses:
+        '201':
+          description: Tarea publicada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags: [Assignments]
+      summary: Listar tareas del curso (US-004)
+      operationId: listAssignments
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, overdue, all]
+            default: pending
+      responses:
+        '200':
+          description: Lista de tareas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assignment'
+
+  /students/{studentId}/assignments:
+    get:
+      tags: [Assignments]
+      summary: Agenda de tareas del alumno (US-004)
+      operationId: listStudentAssignments
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Tareas del alumno ordenadas por fecha
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assignment'
+
+  /discipline:
+    post:
+      tags: [Discipline]
+      summary: Registrar incidente o felicitación (US-005, US-006)
+      operationId: createDisciplineRecord
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisciplineRequest'
+      responses:
+        '201':
+          description: Registro creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisciplineRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /students/{studentId}/discipline:
+    get:
+      tags: [Discipline]
+      summary: Historial disciplinario del alumno
+      operationId: listDisciplineRecords
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Registros de disciplina
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DisciplineRecord'
+
+  /announcements:
+    post:
+      tags: [Announcements]
+      summary: Publicar comunicado (US-007)
+      operationId: createAnnouncement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnnouncementRequest'
+      responses:
+        '201':
+          description: Comunicado publicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+
+    get:
+      tags: [Announcements]
+      summary: Listar comunicados (US-008)
+      operationId: listAnnouncements
+      parameters:
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Comunicados del colegio
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+
+  /announcements/{announcementId}/read:
+    post:
+      tags: [Announcements]
+      summary: Marcar comunicado como leído (US-008)
+      operationId: markAnnouncementRead
+      parameters:
+        - $ref: '#/components/parameters/AnnouncementId'
+      responses:
+        '204':
+          description: Marcado como leído
+
+  /calendar/events:
+    post:
+      tags: [Calendar]
+      summary: Crear evento en calendario (US-009)
+      operationId: createCalendarEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCalendarEventRequest'
+      responses:
+        '201':
+          description: Evento creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarEvent'
+
+    get:
+      tags: [Calendar]
+      summary: Consultar calendario
+      operationId: listCalendarEvents
+      parameters:
+        - name: student_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Eventos del periodo
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarEvent'
+
+  /messages/threads:
+    post:
+      tags: [Messages]
+      summary: Iniciar o obtener thread de chat (US-010)
+      operationId: getOrCreateThread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateThreadRequest'
+      responses:
+        '200':
+          description: Thread existente o nuevo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageThread'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /messages/threads/{threadId}/messages:
+    post:
+      tags: [Messages]
+      summary: Enviar mensaje (US-010)
+      operationId: sendMessage
+      parameters:
+        - $ref: '#/components/parameters/ThreadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Mensaje enviado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+    get:
+      tags: [Messages]
+      summary: Historial de mensajes
+      operationId: listMessages
+      parameters:
+        - $ref: '#/components/parameters/ThreadId'
+      responses:
+        '200':
+          description: Mensajes del thread
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+
+  /messages/threads/{threadId}/audit:
+    get:
+      tags: [Messages]
+      summary: Auditoría de conversación (US-011)
+      operationId: auditThread
+      parameters:
+        - $ref: '#/components/parameters/ThreadId'
+        - name: reason
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Historial auditado
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Generar recordatorio de pago con QR (US-012)
+      operationId: createPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Pago generado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+
+  /payments/{paymentId}/confirm:
+    post:
+      tags: [Payments]
+      summary: Confirmar pago recibido (US-012)
+      operationId: confirmPayment
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Pago confirmado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+
+  /students/{studentId}/payments:
+    get:
+      tags: [Payments]
+      summary: Historial de pagos del alumno
+      operationId: listStudentPayments
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Pagos del alumno
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+
+  /grades:
+    post:
+      tags: [Grades]
+      summary: Publicar calificación (US-013)
+      operationId: createGrade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGradeRequest'
+      responses:
+        '201':
+          description: Calificación publicada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+
+  /students/{studentId}/grades:
+    get:
+      tags: [Grades]
+      summary: Boletín de calificaciones (US-013)
+      operationId: listStudentGrades
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calificaciones del alumno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeReport'
+
+  /courses/{courseId}/galleries:
+    post:
+      tags: [Galleries]
+      summary: Crear álbum de actividades (US-015)
+      operationId: createGalleryAlbum
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGalleryAlbumRequest'
+      responses:
+        '201':
+          description: Álbum creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbum'
+
+    get:
+      tags: [Galleries]
+      summary: Listar álbumes del curso
+      operationId: listGalleryAlbums
+      parameters:
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: Álbumes del curso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GalleryAlbum'
+
+  /galleries/{albumId}:
+    get:
+      tags: [Galleries]
+      summary: Ver álbum con fotos (US-015)
+      operationId: getGalleryAlbum
+      parameters:
+        - $ref: '#/components/parameters/AlbumId'
+      responses:
+        '200':
+          description: Detalle del álbum
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryAlbumDetail'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /directory:
+    get:
+      tags: [Directory]
+      summary: Directorio de emergencias (US-016)
+      operationId: getDirectory
+      responses:
+        '200':
+          description: Contactos del colegio
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DirectoryContact'
+
+  /polls:
+    post:
+      tags: [Polls]
+      summary: Crear encuesta (US-017)
+      operationId: createPoll
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePollRequest'
+      responses:
+        '201':
+          description: Encuesta creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poll'
+
+    get:
+      tags: [Polls]
+      summary: Listar encuestas activas
+      operationId: listPolls
+      responses:
+        '200':
+          description: Encuestas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Poll'
+
+  /polls/{pollId}/vote:
+    post:
+      tags: [Polls]
+      summary: Votar en encuesta (US-017)
+      operationId: votePoll
+      parameters:
+        - $ref: '#/components/parameters/PollId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoteRequest'
+      responses:
+        '201':
+          description: Voto registrado
+        '400':
+          description: Encuesta cerrada o ya votó
+
+  /signatures/requests:
+    post:
+      tags: [Signatures]
+      summary: Solicitar firma digital (US-018, US-019)
+      operationId: createSignatureRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSignatureRequest'
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignatureRequest'
+
+  /signatures/requests/{signatureId}:
+    get:
+      tags: [Signatures]
+      summary: Detalle de solicitud de firma
+      operationId: getSignatureRequest
+      parameters:
+        - $ref: '#/components/parameters/SignatureId'
+      responses:
+        '200':
+          description: Solicitud de firma
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignatureRequest'
+
+  /signatures/requests/{signatureId}/respond:
+    post:
+      tags: [Signatures]
+      summary: Firmar o rechazar documento (US-018, US-019)
+      operationId: respondSignature
+      parameters:
+        - $ref: '#/components/parameters/SignatureId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/SignDocumentRequest'
+                - $ref: '#/components/schemas/RejectSignatureRequest'
+      responses:
+        '200':
+          description: Respuesta registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignatureRequest'
+
+  /files/upload:
+    post:
+      tags: [Files]
+      summary: Subir adjunto (tareas, galería)
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                purpose:
+                  type: string
+                  enum: [assignment, gallery, signature]
+      responses:
+        '201':
+          description: Archivo subido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    StudentId:
+      name: studentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CourseId:
+      name: courseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AnnouncementId:
+      name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ThreadId:
+      name: threadId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AlbumId:
+      name: albumId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PollId:
+      name: pollId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SignatureId:
+      name: signatureId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Credenciales inválidas o token expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Sin permiso para este recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+
+    AuthLoginRequest:
+      type: object
+      required: [email, password, school_slug]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        school_slug:
+          type: string
+          example: san-miguel
+
+    AuthLoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          example: 900
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [admin, teacher, parent, treasurer]
+        first_name:
+          type: string
+        last_name:
+          type: string
+        school_id:
+          type: string
+          format: uuid
+
+    Student:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        enrollment_code:
+          type: string
+        course_id:
+          type: string
+          format: uuid
+
+    LinkGuardianRequest:
+      type: object
+      required: [parent_id, relationship]
+      properties:
+        parent_id:
+          type: string
+          format: uuid
+        relationship:
+          type: string
+          enum: [padre, madre, tutor]
+        is_primary:
+          type: boolean
+          default: false
+
+    Guardian:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        relationship:
+          type: string
+
+    CreateAttendanceRequest:
+      type: object
+      required: [student_id, status]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [presente, tarde, ausente]
+        check_in_at:
+          type: string
+          format: date-time
+
+    CheckoutRequest:
+      type: object
+      required: [student_id, check_out_at]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        check_out_at:
+          type: string
+          format: date-time
+
+    AttendanceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [presente, tarde, ausente]
+        check_in_at:
+          type: string
+          format: date-time
+        check_out_at:
+          type: string
+          format: date-time
+
+    AttendanceSummaryResponse:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        summary:
+          type: object
+          properties:
+            presente:
+              type: integer
+            tarde:
+              type: integer
+            ausente:
+              type: integer
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceRecord'
+
+    CreateAssignmentRequest:
+      type: object
+      required: [title, due_date]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        due_date:
+          type: string
+          format: date
+        attachment_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Assignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        due_date:
+          type: string
+          format: date
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+              filename:
+                type: string
+        is_overdue:
+          type: boolean
+
+    CreateDisciplineRequest:
+      type: object
+      required: [student_id, type, description]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [incidente, felicitacion]
+        severity:
+          type: string
+          enum: [leve, media, grave]
+        description:
+          type: string
+
+    DisciplineRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        severity:
+          type: string
+        description:
+          type: string
+        signature_status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateAnnouncementRequest:
+      type: object
+      required: [title, body, audience]
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        audience:
+          type: string
+          enum: [todo_el_colegio, docentes, padres, curso]
+        course_id:
+          type: string
+          format: uuid
+
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        audience:
+          type: string
+        published_at:
+          type: string
+          format: date-time
+        is_read:
+          type: boolean
+
+    CreateCalendarEventRequest:
+      type: object
+      required: [type, title, starts_at]
+      properties:
+        course_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [examen, actividad, reunion, feriado]
+        title:
+          type: string
+        description:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+
+    CalendarEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+
+    CreateThreadRequest:
+      type: object
+      required: [course_id, teacher_id]
+      properties:
+        course_id:
+          type: string
+          format: uuid
+        teacher_id:
+          type: string
+          format: uuid
+
+    MessageThread:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        teacher_id:
+          type: string
+          format: uuid
+
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 2000
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+
+    CreatePaymentRequest:
+      type: object
+      required: [student_id, concept, amount_cents, due_date]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        concept:
+          type: string
+        amount_cents:
+          type: integer
+        due_date:
+          type: string
+          format: date
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+          example: PAY-2026-06-JP001
+        concept:
+          type: string
+        amount_cents:
+          type: integer
+        status:
+          type: string
+          enum: [pendiente, pagado, vencido, cancelado]
+        qr_payload:
+          type: string
+        due_date:
+          type: string
+          format: date
+
+    CreateGradeRequest:
+      type: object
+      required: [student_id, course_id, subject, period, score]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        period:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+
+    Grade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        period:
+          type: string
+        score:
+          type: number
+
+    GradeReport:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        period:
+          type: string
+        grades:
+          type: array
+          items:
+            $ref: '#/components/schemas/Grade'
+        average:
+          type: number
+
+    CreateGalleryAlbumRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        photo_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    GalleryAlbum:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        photo_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    GalleryAlbumDetail:
+      allOf:
+        - $ref: '#/components/schemas/GalleryAlbum'
+        - type: object
+          properties:
+            photos:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  url:
+                    type: string
+                  caption:
+                    type: string
+
+    DirectoryContact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        schedule:
+          type: string
+
+    CreatePollRequest:
+      type: object
+      required: [title, options, starts_at, ends_at]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        options:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        is_public_results:
+          type: boolean
+          default: true
+
+    Poll:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+        ends_at:
+          type: string
+          format: date-time
+        has_voted:
+          type: boolean
+
+    VoteRequest:
+      type: object
+      required: [option_id]
+      properties:
+        option_id:
+          type: string
+
+    CreateSignatureRequest:
+      type: object
+      required: [student_id, parent_id, document_type, title, body]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        document_type:
+          type: string
+          enum: [autorizacion_excursion, acuse_disciplina, personalizado]
+        title:
+          type: string
+        body:
+          type: string
+        related_id:
+          type: string
+          format: uuid
+
+    SignatureRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        document_type:
+          type: string
+        status:
+          type: string
+          enum: [pendiente, firmado, rechazado]
+        signed_at:
+          type: string
+          format: date-time
+        rejected_reason:
+          type: string
+
+    SignDocumentRequest:
+      type: object
+      required: [action, signature_image_base64]
+      properties:
+        action:
+          type: string
+          enum: [sign]
+        signature_image_base64:
+          type: string
+
+    RejectSignatureRequest:
+      type: object
+      required: [action, reason]
+      properties:
+        action:
+          type: string
+          enum: [reject]
+        reason:
+          type: string
+
+    FileUploadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        filename:
+          type: string
+        mime_type:
+          type: string
