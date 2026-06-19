@@ -1,0 +1,68 @@
+---
+description: Next.js / React web app conventions for apps/web
+globs: apps/web/**/*
+alwaysApply: false
+---
+
+# React Web (Next.js)
+
+## App Router layout by role
+
+```
+app/
+├── (auth)/login/
+├── (admin)/          # admin only
+├── (director)/       # director only
+├── (teacher)/        # teacher
+└── (family)/         # parent + student
+```
+
+Use route groups + middleware to enforce RBAC. Redirect wrong role to login or 403 page.
+
+## Conventions
+
+- **Server Components** by default; `'use client'` only for interactivity
+- Functional components + TypeScript; named exports for pages
+- Data fetching: Server Components call API with server-side token OR use React Query on client
+- Shared types from `packages/shared` or `packages/api-client`
+
+## API client
+
+```typescript
+// ✅ Typed client from OpenAPI
+import { api } from '@/lib/api-client';
+
+const dashboard = await api.GET('/parents/dashboard/{studentId}', {
+  params: { path: { studentId } },
+});
+```
+
+- Auth token in httpOnly cookie (web); attach in middleware/API route
+- Never store JWT in localStorage on web
+
+## Role-specific UI
+
+| Role | Web-only screens |
+|------|------------------|
+| admin | User CRUD, module toggles |
+| director | Teacher assignment, PDF reports |
+| teacher | Full submission grading table |
+| parent/student | Dashboard, assignments (student submits) |
+
+## Components
+
+- Colocate: `components/{domain}/ComponentName.tsx`
+- Extract hooks: `hooks/useAssignments.ts`
+- Forms: React Hook Form + Zod (schemas aligned with API DTOs)
+
+## Styling
+
+- Tailwind CSS; consistent spacing scale
+- Accessible: labels, focus states, semantic HTML
+- User-facing copy in **Spanish**
+
+## Do not
+
+- Duplicate API types — generate from `specs/Openapi.yml`
+- Allow parent role to render submit-assignment forms
+- Fetch in `useEffect` what a Server Component can load directly

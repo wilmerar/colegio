@@ -1,0 +1,79 @@
+---
+description: React Native / Expo mobile conventions for apps/mobile
+globs: apps/mobile/**/*
+alwaysApply: false
+---
+
+# React Native Mobile (Expo)
+
+## Scope
+
+Mobile app serves **teacher**, **student**, and **parent** only.
+Admin and director use web — show friendly redirect if those roles log in on mobile.
+
+## Navigation
+
+```typescript
+// Post-login redirect by role
+switch (user.role) {
+  case 'teacher':  return <TeacherStack />;
+  case 'student':  return <StudentStack />;
+  case 'parent':   return <ParentStack />;
+  default:         return <WebOnlyMessage />;
+}
+```
+
+Stacks: `@react-navigation/native` + native stack per role.
+
+## Conventions
+
+- TypeScript strict; functional components
+- Shared types from `packages/shared` and `packages/api-client`
+- Screens in `src/screens/{role}/`; shared UI in `src/components/`
+- Custom hooks for API + auth: `useAuth`, `useAssignments`
+
+## API & auth
+
+- Store tokens in **Expo SecureStore**, not AsyncStorage
+- Attach `Authorization: Bearer` via axios/fetch interceptor
+- Handle 401 → refresh token or logout to login screen
+
+## Mobile-first features
+
+Prioritize mobile UX for:
+
+- Push notifications (Expo Notifications + FCM)
+- Camera/file picker for assignment submissions (student)
+- Quick attendance marking (teacher)
+- Parent dashboard home screen
+- Signature canvas (parent) — `react-native-signature-canvas`
+
+## Parent vs student
+
+```typescript
+// ✅ Parent: read-only task view
+<AssignmentDetail assignment={a} submission={s} mode="readonly" />
+
+// ✅ Student: can submit
+<AssignmentDetail assignment={a} submission={s} mode="submit" onSubmit={...} />
+```
+
+Never expose submit actions when `role === 'parent'`.
+
+## Performance
+
+- FlatList for long lists (tasks, messages); avoid ScrollView + map
+- Image caching for gallery; compress before upload
+- Loading and error states on every screen
+
+## Styling
+
+- StyleSheet or NativeWind (Tailwind) — pick one, stay consistent
+- SafeAreaView on all screens; test iOS + Android
+- Spanish UI strings; use i18n keys if project grows
+
+## Do not
+
+- Use web-only APIs (`window`, DOM)
+- Block UI on network — show skeletons/spinners
+- Hardcode API URL; use env `EXPO_PUBLIC_API_URL`

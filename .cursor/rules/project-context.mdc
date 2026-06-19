@@ -1,0 +1,50 @@
+---
+description: Colegio app — stack, monorepo layout, SDD specs, roles
+alwaysApply: true
+---
+
+# Project Context — Colegio
+
+School control platform: **parent monitoring** + **Moodle-style tasks**.
+
+## Stack
+
+| Layer | Tech |
+|-------|------|
+| Backend | Node.js + **NestJS** + TypeScript |
+| Web | **Next.js 14** (App Router) + React + TypeScript |
+| Mobile | **React Native** + Expo + TypeScript |
+| DB | PostgreSQL 16 (see `specs/Database.md`) |
+| API contract | `specs/Openapi.yml` — keep code in sync |
+
+## Monorepo layout (planned)
+
+```
+apps/api/       NestJS
+apps/web/       Next.js
+apps/mobile/    React Native + Expo
+packages/shared/     types, constants
+packages/api-client/ generated from Openapi.yml
+specs/          SDD source of truth (do not skip)
+```
+
+## Roles (RBAC)
+
+`admin` | `director` | `teacher` | `student` | `parent`
+
+- Admin/Director: **web only**
+- Teacher/Student/Parent: **web + mobile**
+- Parent: read-only on child data; cannot submit assignments
+
+## SDD workflow
+
+1. Change `specs/Userstories.md` (Gherkin) first when adding features
+2. Update `Models.md`, `Database.md`, `Openapi.yml`
+3. Implement + tests per `Testing.md` and `DefinitionOfDone.md`
+
+## General rules
+
+- TypeScript everywhere; no `any` without comment
+- Spanish for user-facing strings; English for code identifiers
+- Multi-tenant: always filter by `school_id` from JWT
+- Minimize diff scope; match existing patterns in each app

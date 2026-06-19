@@ -1,0 +1,81 @@
+---
+description: NestJS / Node.js backend conventions for apps/api
+globs: apps/api/**/*
+alwaysApply: false
+---
+
+# Node.js Backend (NestJS)
+
+## Structure
+
+Organize by domain module (matches `specs/Architecture.md`):
+
+```
+apps/api/src/
+├── auth/
+├── admin/
+├── director/
+├── assignments/
+├── submissions/
+├── attendance/
+├── parent-dashboard/
+└── common/          guards, filters, decorators
+```
+
+Each module: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, `entities/`.
+
+## Conventions
+
+- Use **class-validator** + **class-transformer** on DTOs; mirror `specs/Openapi.yml` schemas
+- Controllers: thin — delegate to services; return types match OpenAPI
+- Services: business rules from Gherkin scenarios in `specs/Userstories.md`
+- Inject repositories; no raw SQL in controllers
+
+## Auth & RBAC
+
+```typescript
+// ✅ Guard per route
+@Roles('teacher', 'admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+
+// ✅ Scope queries by tenant + ownership
+async findStudentAssignments(studentId: string, user: AuthUser) {
+  await this.guardianGuard.assertCanAccessStudent(user, studentId);
+  return this.repo.findByStudent(studentId, user.schoolId);
+}
+```
+
+- JWT payload: `sub`, `role`, `school_id`, optional `student_id`
+- Never trust client `school_id`; read from token
+
+## API errors
+
+```typescript
+// ✅ Consistent shape (matches Openapi.yml ErrorResponse)
+throw new BadRequestException({
+  error: { code: 'VALIDATION_ERROR', message: '...', details: [] },
+});
+```
+
+## Database
+
+- PostgreSQL via TypeORM or Prisma — schema follows `specs/Database.md`
+- Migrations required for every schema change
+- Use transactions for multi-table writes (e.g. submission + notification event)
+
+## Events & notifications
+
+- Publish domain events async (BullMQ): `AttendanceRecorded`, `AssignmentGraded`
+- FCM push in worker, not in request handler
+
+## Testing
+
+- Unit: services + guards
+- Integration: Supertest per endpoint; cover 200, 401, 403, 400
+- Reference `specs/Testing.md` for story → test mapping
+
+## Do not
+
+- Put secrets in code; use env vars
+- Expose `password_hash`, internal IDs cross-tenant
+- Skip OpenAPI update when adding endpoints

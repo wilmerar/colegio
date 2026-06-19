@@ -1,0 +1,32 @@
+---
+description: Shared TypeScript packages (packages/shared, packages/api-client)
+globs: packages/**/*
+alwaysApply: false
+---
+
+# Shared Packages
+
+## packages/shared
+
+- Pure types, constants, validators — **no React, no NestJS imports**
+- Export roles, enums matching `specs/Models.md`:
+
+```typescript
+export const ROLES = ['admin', 'director', 'teacher', 'student', 'parent'] as const;
+export type UserRole = (typeof ROLES)[number];
+export type SubmissionStatus = 'pendiente' | 'entregada' | 'entregada_tarde' | 'calificada' | 'devuelta';
+```
+
+- Zod schemas optional for shared validation between web and API
+
+## packages/api-client
+
+- Generated from `specs/Openapi.yml` via `openapi-typescript` or `openapi-fetch`
+- Regenerate when OpenAPI changes; do not hand-edit generated files
+- Script in root: `"generate:api": "openapi-typescript specs/Openapi.yml -o packages/api-client/src/schema.ts"`
+
+## Rules
+
+- `packages/*` must not depend on `apps/*`
+- Apps depend on packages, not the reverse
+- Keep packages small; move domain logic to backend services
