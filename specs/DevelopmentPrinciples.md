@@ -267,9 +267,10 @@ throw new Error('something went wrong');
 
 ### 6.6 Tests limpios
 
-- Patrón Arrange – Act – Assert
-- Un assert principal por test
-- Nombres: `should mark submission as late when submitted after due_at`
+- Patrón **Arrange – Act – Assert**
+- Un comportamiento principal por `it`; nombre: `should [result] when [condition]`
+- Archivo colocado junto al código: `foo.service.ts` → `foo.service.spec.ts`
+- Guía completa: `Testing.md` §2 (cuándo, qué mockear, cobertura ≥ 80%)
 
 ---
 
@@ -388,7 +389,8 @@ export function useStudentAssignments(studentId: string) {
 - [ ] ¿SOLID — controller delgado, service con reglas, repo con datos?
 - [ ] ¿Clean — nombres claros, sin console.log, errores tipados?
 - [ ] ¿OpenAPI actualizado si cambió la API?
-- [ ] ¿Tests para reglas de negocio nuevas?
+- [ ] ¿Tests para reglas de negocio nuevas (`Testing.md` §2)?
+- [ ] ¿Happy path + error/borde por método nuevo?
 - [ ] ¿RBAC verificado (padre no entrega, admin cross-tenant bloqueado)?
 
 ---

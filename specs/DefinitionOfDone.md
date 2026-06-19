@@ -21,10 +21,12 @@ Una user story está **Done** cuando se cumplen **todos** los ítems:
 - [ ] `school_id` (multi-tenant) verificado en todas las queries.
 
 ### 1.3 Pruebas
-- [ ] Tests unitarios para reglas de negocio (ver `Testing.md`).
-- [ ] Test de integración por endpoint (happy path + 401/403/400).
-- [ ] Escenario(s) Gherkin ejecutables en verde (Cucumber).
+- [ ] Tests unitarios para reglas de negocio nuevas (ver `Testing.md` §2).
+- [ ] Cada método de service/guard nuevo: happy path + caso error/borde.
+- [ ] Escenarios Gherkin de la user story cubiertos (unit o integration).
+- [ ] Test de integración por endpoint nuevo/cambiado (happy path + 401/403/400).
 - [ ] Sin regresiones: suite CI completa en verde.
+- [ ] Cobertura services ≥ 80%; no disminuir cobertura en el PR.
 
 ### 1.4 Calidad de código
 - [ ] Cumple `DevelopmentPrinciples.md` (KISS, DRY, SOLID, YAGNI, clean code).

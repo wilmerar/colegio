@@ -39,4 +39,4 @@ Repository, DTO, Guard/Decorator, Strategy (OAuth/notifications), Domain Events 
 Over-abstracted factories, manual singletons, speculative layers.
 
 ## Pre-PR
-Story traced? OpenAPI sync? RBAC checked? Business rule tests? KISS over cleverness.
+Story traced? OpenAPI sync? RBAC checked? **Unit tests for every new service/guard method** (see `Testing.md` §2)? CI green? KISS over cleverness.

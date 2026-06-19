@@ -25,7 +25,173 @@
 
 ---
 
-## 2. Mapeo User Story → Suite de pruebas
+## 2. Unit tests — adding tests for new code
+
+> **Rule:** Every PR with new business logic must include unit tests. No unit test → no merge (except trivial config/docs-only changes).
+
+### 2.1 When unit tests are required
+
+| Change type | Unit test required? | Where |
+|-------------|---------------------|--------|
+| New/changed **service** method (business rule) | **Yes** | `*.service.spec.ts` |
+| New **guard** / RBAC check | **Yes** | `*.guard.spec.ts` |
+| New **validator** / pure function in `packages/shared` | **Yes** | `*.spec.ts` next to file |
+| New **custom hook** with logic (not just fetch wrapper) | **Yes** | `*.test.ts` |
+| New **controller** endpoint only (delegates to service) | No* | Cover via integration test |
+| UI component layout/styling only | No* | Optional snapshot; E2E if critical |
+| DTO / type-only change | No | Contract test if OpenAPI changed |
+
+\*Service behind the endpoint must already be unit-tested.
+
+### 2.2 What to unit test (and what to skip)
+
+**Do test:**
+- Business rules from Gherkin (`Given/When/Then` → test cases)
+- Branching logic (late submission, role denied, invalid state)
+- Error codes returned (`USER_NOT_INVITED`, `PARENT_CANNOT_SUBMIT`)
+- Edge cases (empty list, boundary dates, max score)
+
+**Do not unit test:**
+- Framework behaviour (NestJS routing, React rendering internals)
+- Database queries in isolation — use integration tests with test DB
+- Third-party SDKs (Google OAuth, FCM) — mock the adapter boundary
+
+### 2.3 File layout & naming
+
+```
+apps/api/src/assignments/
+├── assignments.service.ts
+├── assignments.service.spec.ts      ← colocated
+├── guards/
+│   └── submission.guard.ts
+│   └── submission.guard.spec.ts
+
+packages/shared/src/validators/
+├── submission.ts
+└── submission.spec.ts
+
+apps/web/src/hooks/
+├── useStudentAssignments.ts
+└── useStudentAssignments.test.ts
+```
+
+Naming: `describe('AssignmentsService')` → `describe('submitAssignment')` → `it('should mark as entregada_tarde when after due_at')`.
+
+### 2.4 Structure — Arrange, Act, Assert
+
+```typescript
+describe('SubmissionsService', () => {
+  describe('submit', () => {
+    it('should set status entregada_tarde when submitted after due_at', async () => {
+      // Arrange
+      const assignment = fixture.assignment({ dueAt: '2026-06-25T23:59:00Z' });
+      const dto = { assignmentId: assignment.id, submittedAt: '2026-06-26T10:00:00Z' };
+      repo.findById.mockResolvedValue(assignment);
+
+      // Act
+      const result = await service.submit(dto, studentUser);
+
+      // Assert
+      expect(result.status).toBe('entregada_tarde');
+      expect(eventBus.publish).toHaveBeenCalledWith('SubmissionReceived', expect.any(Object));
+    });
+
+    it('should throw ForbiddenException when parent tries to submit', async () => {
+      await expect(service.submit(dto, parentUser)).rejects.toMatchObject({
+        response: { error: { code: 'PARENT_CANNOT_SUBMIT' } },
+      });
+    });
+  });
+});
+```
+
+One main behaviour per `it`. Name tests as: **`should [expected] when [condition]`**.
+
+### 2.5 Mocking rules (backend)
+
+| Dependency | Mock strategy |
+|------------|---------------|
+| Repository / DB | `jest.mock` or manual mock object injected via NestJS TestingModule |
+| External APIs (Google, FCM, S3) | Mock adapter class; never call real APIs in unit tests |
+| Event bus / queue | `jest.fn()`; assert `publish` called with correct event |
+| Other services | Mock only if not under test; prefer testing real service + mocked repo |
+
+```typescript
+const module = await Test.createTestingModule({
+  providers: [
+    SubmissionsService,
+    { provide: ASSIGNMENT_REPOSITORY, useValue: mockRepo },
+    { provide: EventBus, useValue: { publish: jest.fn() } },
+  ],
+}).compile();
+```
+
+### 2.6 Map Gherkin scenario → unit tests
+
+Each **Scenario** in `Userstories.md` should produce at least one unit or integration test.
+
+| Gherkin step | Unit test assertion |
+|--------------|---------------------|
+| `Then el registro queda con estado "tarde"` | `expect(result.status).toBe('tarde')` |
+| `Then recibe error 403` | `rejects.toMatchObject({ status: 403 })` |
+| `Then el padre recibe notificación` | `expect(eventBus.publish).toHaveBeenCalledWith(...)` |
+| `Then no puede cambiar el voto` | second call throws / returns 409 |
+
+### 2.7 Coverage expectations
+
+| Area | Target |
+|------|--------|
+| `apps/api/src/**/*.service.ts` | ≥ **80%** lines/branches |
+| `apps/api/src/**/guards/*.ts` | **100%** of permission branches |
+| `packages/shared/src/**/*.ts` | ≥ **90%** |
+| New file in PR | Must not **decrease** overall service coverage |
+
+Run locally before PR:
+
+```bash
+pnpm --filter api test:unit -- --coverage
+pnpm --filter web test -- --coverage
+```
+
+### 2.8 Frontend unit tests (web & mobile)
+
+| Test | Tool | Example |
+|------|------|---------|
+| Pure utils / formatters | Vitest/Jest | `formatDueDate.spec.ts` |
+| Custom hooks | React Testing Library + Vitest | `useStudentAssignments.test.ts` |
+| Role-gated UI logic | RTL | render as parent → submit button absent |
+| Screens | Optional | Prefer integration/E2E for flows |
+
+```typescript
+it('does not show submit button for parent role', () => {
+  render(<AssignmentDetail assignment={mock} user={parentUser} />);
+  expect(screen.queryByRole('button', { name: /entregar/i })).not.toBeInTheDocument();
+});
+```
+
+### 2.9 PR checklist — unit tests (copy into PR)
+
+```markdown
+### Unit tests added
+- [ ] New/changed service methods have tests in `*.service.spec.ts`
+- [ ] Happy path + at least one error/edge case per method
+- [ ] Gherkin scenario US-XXX covered
+- [ ] Mocks at repository/adapter boundary (no real DB/API)
+- [ ] `pnpm test:unit` passes locally
+- [ ] Coverage not decreased (services ≥ 80%)
+```
+
+### 2.10 Anti-patterns (do not merge)
+
+- Test that only asserts `toBeDefined()` or mock was called with no behaviour check
+- Copy-paste tests with renamed strings only
+- Testing private methods directly — test via public API
+- Skipping tests with `it.skip` without linked issue
+- Unit test that requires running PostgreSQL (move to integration)
+
+---
+
+## 3. Mapeo User Story → Suite de pruebas
 
 | User Story | Tipo test | Archivo feature |
 |------------|-----------|-----------------|
@@ -45,7 +211,7 @@
 
 ---
 
-## 3. Ejemplo: feature ejecutable desde US-001
+## 4. Ejemplo: feature ejecutable desde US-001
 
 Archivo: `tests/features/attendance/entry.feature`
 
@@ -94,7 +260,7 @@ When('la docente registra entrada de {string} a las {string}', async (student, t
 
 ---
 
-## 4. Pruebas de integración API (por endpoint)
+## 5. Pruebas de integración API (por endpoint)
 
 Cada endpoint en `Openapi.yml` debe tener al menos:
 
@@ -117,7 +283,7 @@ describe('POST /attendance', () => {
 
 ---
 
-## 5. Pruebas de reglas de negocio (unitarias)
+## 6. Pruebas de reglas de negocio (unitarias)
 
 | Regla | User Story | Test |
 |-------|------------|------|
@@ -132,7 +298,7 @@ describe('POST /attendance', () => {
 
 ---
 
-## 6. Pruebas de notificaciones
+## 7. Pruebas de notificaciones
 
 Mock de FCM en tests; verificar cola de eventos:
 
@@ -157,7 +323,7 @@ it('publica evento AttendanceRecorded al marcar entrada', async () => {
 
 ---
 
-## 7. Pruebas de seguridad
+## 8. Pruebas de seguridad
 
 | Caso | Expected |
 |------|----------|
@@ -170,7 +336,7 @@ it('publica evento AttendanceRecorded al marcar entrada', async () => {
 
 ---
 
-## 8. Pruebas E2E (flujos críticos MVP)
+## 9. Pruebas E2E (flujos críticos MVP)
 
 ### Flujo 1: Día escolar completo
 1. Docente marca entrada → padre recibe push (simulado)
@@ -190,7 +356,7 @@ it('publica evento AttendanceRecorded al marcar entrada', async () => {
 
 ---
 
-## 9. CI/CD — Pipeline de tests
+## 10. CI/CD — Pipeline de tests
 
 ```yaml
 # .github/workflows/test.yml
@@ -211,7 +377,7 @@ jobs:
 
 ---
 
-## 10. Checklist manual pre-release
+## 11. Checklist manual pre-release
 
 - [ ] Login padre/docente/admin en dispositivo real
 - [ ] Push notification en Android e iOS
@@ -223,7 +389,7 @@ jobs:
 
 ---
 
-## 11. Datos de prueba (fixtures)
+## 12. Datos de prueba (fixtures)
 
 | Entidad | Fixture |
 |---------|---------|
@@ -237,7 +403,7 @@ Fixtures en `tests/fixtures/` — recreados por transacción rollback en integra
 
 ---
 
-## 12. Métricas de calidad
+## 13. Métricas de calidad
 
 | Métrica | Objetivo MVP |
 |---------|--------------|
@@ -249,7 +415,7 @@ Fixtures en `tests/fixtures/` — recreados por transacción rollback en integra
 
 ---
 
-## 13. Herramientas recomendadas
+## 14. Herramientas recomendadas
 
 | Propósito | Herramienta |
 |-----------|-------------|

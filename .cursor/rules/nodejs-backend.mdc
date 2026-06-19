@@ -70,9 +70,12 @@ throw new BadRequestException({
 
 ## Testing
 
-- Unit: services + guards
-- Integration: Supertest per endpoint; cover 200, 401, 403, 400
-- Reference `specs/Testing.md` for story → test mapping
+- Unit: services + guards — see `specs/Testing.md` §2
+- **New service method → new tests in colocated `*.service.spec.ts`**
+- Pattern: Arrange – Act – Assert; name `should X when Y`
+- Mock repositories/adapters; never real DB in unit tests
+- Cover: happy path + error/edge case + Gherkin scenario from user story
+- Integration: Supertest per endpoint; reference `specs/Testing.md`
 
 ## Do not
 

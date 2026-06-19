@@ -24,9 +24,20 @@
 - [ ] Parent cannot submit assignments / cross-tenant blocked
 
 ### Tests
-- [ ] Unit tests for new business rules
+- [ ] Unit tests for new business rules (see below)
 - [ ] Integration test for new/changed endpoints
 - [ ] CI green
+
+#### Unit tests (required for new logic)
+- [ ] Added/updated `*.service.spec.ts` (or `*.guard.spec.ts` / `packages/shared/*.spec.ts`)
+- [ ] Happy path **+** at least one error or edge case per new method
+- [ ] Maps to Gherkin scenario **US-XXX**
+- [ ] Mocks at repo/adapter boundary — no real DB or external APIs
+- [ ] `pnpm test:unit` passes; service coverage ≥ 80%
+
+<!-- List new test files:
+- apps/api/src/.../foo.service.spec.ts — describes what is covered
+-->
 
 ---
 
