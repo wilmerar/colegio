@@ -82,10 +82,28 @@ Una release está **Done** cuando:
 
 ## 4. DoD específico por épica
 
+### E2 — Tareas Moodle (LMS)
+- [ ] Ciclo completo: publicar → entregar → calificar → notificar padre
+- [ ] Panel de entregas con contadores (US-027)
+- [ ] Reenvío de tarea si `allow_resubmit=true`
+- [ ] Padre ve estado pero no puede entregar
+
+### E-P — Panel parental
+- [ ] Dashboard agrega asistencia, tareas, notas y disciplina (US-029)
+- [ ] Solo hijos vinculados visibles
+
+### E-D — Director
+- [ ] Asignación profesor-curso-materia (US-023)
+- [ ] Reporte exportable PDF (US-024)
+
+### E0 — Roles
+- [ ] 5 roles con RBAC en web y móvil
+- [ ] Admin gestiona módulos on/off (US-022)
+
 ### E1 — Asistencia
-- [ ] Cálculo automático tarde vs. horario colegio.
-- [ ] Push al padre en < 30 segundos desde marcado.
-- [ ] Resumen mensual correcto (US-002).
+- [ ] Cálculo automático tarde vs. horario colegio
+- [ ] Push al padre en < 30 segundos desde marcado
+- [ ] Resumen mensual correcto (US-002)
 
 ### E6 — Chat
 - [ ] Ningún endpoint expone teléfono de usuarios.

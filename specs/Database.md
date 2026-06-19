@@ -47,7 +47,7 @@ CREATE TABLE schools (
 ### 3.2 users
 
 ```sql
-CREATE TYPE user_role AS ENUM ('admin', 'teacher', 'parent', 'treasurer');
+CREATE TYPE user_role AS ENUM ('admin', 'director', 'teacher', 'student', 'parent');
 
 CREATE TABLE users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -59,10 +59,15 @@ CREATE TABLE users (
   role          user_role NOT NULL,
   phone         VARCHAR(20),
   fcm_token     TEXT,
+  student_id    UUID,
   is_active     BOOLEAN NOT NULL DEFAULT true,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (school_id, email)
+  UNIQUE (school_id, email),
+  CHECK (
+    (role = 'student' AND student_id IS NOT NULL) OR
+    (role != 'student')
+  )
 );
 
 CREATE INDEX idx_users_school_role ON users (school_id, role);
@@ -110,6 +115,10 @@ CREATE TABLE students (
 );
 
 CREATE INDEX idx_students_course ON students (course_id);
+
+-- FK diferida: usuario alumno vinculado a matrícula
+ALTER TABLE users ADD CONSTRAINT fk_users_student
+  FOREIGN KEY (student_id) REFERENCES students(id);
 ```
 
 ### 3.6 guardians (US-021)
@@ -159,21 +168,69 @@ CREATE INDEX idx_attendance_course_date ON attendance_records (course_id, date);
 
 ---
 
-## 5. DDL — Tareas (E2)
+## 5. DDL — Tareas LMS estilo Moodle (E2)
 
 ```sql
-CREATE TABLE assignments (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id     UUID NOT NULL REFERENCES courses(id),
-  teacher_id    UUID NOT NULL REFERENCES users(id),
-  title         VARCHAR(255) NOT NULL,
-  description   TEXT,
-  due_date      DATE NOT NULL,
-  attachments   JSONB NOT NULL DEFAULT '[]',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TYPE assignment_status AS ENUM ('borrador', 'publicada', 'cerrada');
+CREATE TYPE submission_status AS ENUM (
+  'pendiente', 'entregada', 'entregada_tarde', 'calificada', 'devuelta'
 );
 
-CREATE INDEX idx_assignments_course_due ON assignments (course_id, due_date);
+CREATE TABLE assignments (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id       UUID NOT NULL REFERENCES courses(id),
+  teacher_id      UUID NOT NULL REFERENCES users(id),
+  subject         VARCHAR(100) NOT NULL,
+  title           VARCHAR(255) NOT NULL,
+  instructions    TEXT,
+  due_at          TIMESTAMPTZ NOT NULL,
+  attachments     JSONB NOT NULL DEFAULT '[]',
+  allow_resubmit  BOOLEAN NOT NULL DEFAULT false,
+  max_score       NUMERIC(5,2) NOT NULL DEFAULT 100,
+  status          assignment_status NOT NULL DEFAULT 'borrador',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_assignments_course_due ON assignments (course_id, due_at);
+
+CREATE TABLE assignment_submissions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id   UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+  student_id      UUID NOT NULL REFERENCES students(id),
+  status          submission_status NOT NULL DEFAULT 'pendiente',
+  content_text    TEXT,
+  attachments     JSONB NOT NULL DEFAULT '[]',
+  submitted_at    TIMESTAMPTZ,
+  score           NUMERIC(5,2),
+  feedback        TEXT,
+  graded_by       UUID REFERENCES users(id),
+  graded_at       TIMESTAMPTZ,
+  version         INTEGER NOT NULL DEFAULT 1,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (assignment_id, student_id, version)
+);
+
+CREATE INDEX idx_submissions_assignment ON assignment_submissions (assignment_id, status);
+CREATE INDEX idx_submissions_student ON assignment_submissions (student_id);
+```
+
+**Nota:** La versión activa de una entrega es la de `version` más alta por `(assignment_id, student_id)`.
+
+---
+
+## 5b. DDL — Módulos y reportes
+
+```sql
+CREATE TABLE school_modules (
+  school_id     UUID NOT NULL REFERENCES schools(id),
+  module_code   VARCHAR(50) NOT NULL,
+  is_enabled    BOOLEAN NOT NULL DEFAULT true,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (school_id, module_code)
+);
+
+-- Módulos default: assignments, attendance, discipline, grades,
+-- announcements, chat, payments, signatures, polls, galleries
 ```
 
 ---

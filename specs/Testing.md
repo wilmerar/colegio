@@ -27,29 +27,21 @@
 
 ## 2. Mapeo User Story → Suite de pruebas
 
-| User Story | Tipo test | Archivo feature (propuesto) |
-|------------|-----------|----------------------------|
-| US-001 | BDD + Integration | `features/attendance/entry.feature` |
-| US-002 | BDD + Integration | `features/attendance/history.feature` |
-| US-003 | BDD + Integration | `features/assignments/create.feature` |
-| US-004 | BDD + Integration | `features/assignments/list.feature` |
-| US-005 | BDD | `features/discipline/incident.feature` |
-| US-006 | BDD | `features/discipline/compliment.feature` |
-| US-007 | BDD + Integration | `features/announcements/broadcast.feature` |
-| US-008 | BDD | `features/announcements/read.feature` |
-| US-009 | BDD | `features/calendar/events.feature` |
-| US-010 | BDD + Integration | `features/messaging/chat.feature` |
-| US-011 | Integration | `features/messaging/audit.feature` |
-| US-012 | BDD | `features/payments/qr.feature` |
-| US-013 | BDD | `features/grades/publish.feature` |
-| US-014 | BDD | `features/attendance/checkout.feature` |
-| US-015 | BDD + Integration | `features/galleries/album.feature` |
-| US-016 | Integration | `features/directory/contacts.feature` |
-| US-017 | BDD | `features/polls/vote.feature` |
-| US-018 | BDD + E2E | `features/signatures/excursion.feature` |
-| US-019 | BDD | `features/signatures/discipline_ack.feature` |
-| US-020 | Integration | `features/auth/login.feature` |
+| User Story | Tipo test | Archivo feature |
+|------------|-----------|-----------------|
+| US-020 | BDD + Integration | `features/auth/login.feature` |
 | US-021 | Integration | `features/students/guardians.feature` |
+| US-022 | Integration | `features/admin/users.feature` |
+| US-023 | Integration | `features/director/teachers.feature` |
+| US-024 | BDD + Integration | `features/director/reports.feature` |
+| US-003 | BDD | `features/assignments/create.feature` |
+| US-025 | BDD + Integration | `features/submissions/submit.feature` |
+| US-026 | BDD | `features/submissions/grade.feature` |
+| US-027 | Integration | `features/submissions/panel.feature` |
+| US-004, US-028 | BDD | `features/assignments/student_view.feature` |
+| US-029 | BDD + E2E | `features/parent/dashboard.feature` |
+| US-001, US-002 | BDD | `features/attendance/*.feature` |
+| US-005, US-006 | BDD | `features/discipline/*.feature` |
 
 ---
 
@@ -129,13 +121,14 @@ describe('POST /attendance', () => {
 
 | Regla | User Story | Test |
 |-------|------------|------|
+| Solo alumno puede entregar tarea | US-025 | `submissions.guard.spec.ts` |
+| Padre no puede entregar por el hijo | US-004 | `submissions.guard.spec.ts` |
+| Entrega tardía si `submitted_at > due_at` | US-025 | `submissions.service.spec.ts` |
+| Director no crea admins | US-023 | `director.guard.spec.ts` |
+| Panel padre solo hijos vinculados | US-029 | `parent-dashboard.guard.spec.ts` |
 | Entrada después de `entry_time` → `tarde` | US-001 | `attendance.service.spec.ts` |
-| `due_date` obligatorio en tarea | US-003 | `assignments.service.spec.ts` |
-| Gravedad solo en incidentes | US-005 | `discipline.service.spec.ts` |
+| `due_at` obligatorio en tarea | US-003 | `assignments.service.spec.ts` |
 | Padre solo ve hijos vinculados | US-021 | `guardian.guard.spec.ts` |
-| Un voto por encuesta | US-017 | `polls.service.spec.ts` |
-| Chat solo entre padre-docente del mismo curso | US-010 | `messaging.service.spec.ts` |
-| Firma guarda timestamp + device_info | US-018 | `signatures.service.spec.ts` |
 
 ---
 

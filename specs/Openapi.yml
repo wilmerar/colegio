@@ -2,9 +2,11 @@ openapi: 3.1.0
 info:
   title: App Colegios API
   description: |
-    API REST para aplicación de comunicación escuela–familia.
-    Derivada de Userstories.md (SDD). Multi-tenant por colegio.
-  version: 0.1.0
+    API REST para plataforma web + móvil de control escolar.
+    Enfoque: control parental + tareas estilo Moodle.
+    Roles: admin, director, teacher, student, parent.
+    Derivada de Userstories.md (SDD).
+  version: 0.2.0
   contact:
     name: Equipo Colegio
     email: dev@colegio.local
@@ -17,13 +19,21 @@ servers:
 
 tags:
   - name: Auth
-    description: US-020 Autenticación multi-rol
+    description: US-020 Autenticación multi-rol (web + móvil)
+  - name: Admin
+    description: US-022 Gestión usuarios y módulos
+  - name: Director
+    description: US-023, US-024 Profesores y reportes
   - name: Students
     description: US-021 Vinculación padre-alumno
+  - name: ParentDashboard
+    description: US-029 Panel de control parental
   - name: Attendance
-    description: US-001, US-002, US-014 Asistencia y salida segura
+    description: US-001, US-002 Asistencia
   - name: Assignments
-    description: US-003, US-004 Agenda de tareas
+    description: US-003, US-004, US-027 Tareas estilo Moodle
+  - name: Submissions
+    description: US-025, US-026, US-028 Entregas de alumnos
   - name: Discipline
     description: US-005, US-006 Cuaderno de disciplina
   - name: Announcements
@@ -98,6 +108,173 @@ paths:
                 $ref: '#/components/schemas/AuthLoginResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Listar usuarios del colegio (US-022)
+      operationId: listUsers
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, director, teacher, student, parent]
+      responses:
+        '200':
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Admin]
+      summary: Crear usuario (US-022)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}:
+    patch:
+      tags: [Admin]
+      summary: Editar o desactivar usuario (US-022)
+      operationId: updateUser
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /admin/modules:
+    get:
+      tags: [Admin]
+      summary: Listar módulos del colegio (US-022)
+      operationId: listModules
+      responses:
+        '200':
+          description: Módulos configurados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SchoolModule'
+
+    patch:
+      tags: [Admin]
+      summary: Activar/desactivar módulo (US-022)
+      operationId: updateModule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateModuleRequest'
+      responses:
+        '200':
+          description: Módulo actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolModule'
+
+  /director/teachers/assignments:
+    post:
+      tags: [Director]
+      summary: Asignar profesor a curso/materia (US-023)
+      operationId: assignTeacherToCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignTeacherRequest'
+      responses:
+        '201':
+          description: Asignación creada
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /director/reports/teachers/{teacherId}:
+    get:
+      tags: [Director]
+      summary: Reporte de actividad docente (US-024)
+      operationId: getTeacherReport
+      parameters:
+        - $ref: '#/components/parameters/TeacherId'
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, pdf]
+            default: json
+      responses:
+        '200':
+          description: Reporte del profesor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherReport'
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /parents/dashboard/{studentId}:
+    get:
+      tags: [ParentDashboard]
+      summary: Panel de control del hijo (US-029)
+      operationId: getParentDashboard
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Resumen integral del alumno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParentDashboard'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /students/{studentId}/guardians:
     post:
@@ -217,7 +394,7 @@ paths:
   /courses/{courseId}/assignments:
     post:
       tags: [Assignments]
-      summary: Publicar tarea (US-003)
+      summary: Publicar tarea estilo Moodle (US-003)
       operationId: createAssignment
       parameters:
         - $ref: '#/components/parameters/CourseId'
@@ -236,19 +413,15 @@ paths:
                 $ref: '#/components/schemas/Assignment'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
     get:
       tags: [Assignments]
-      summary: Listar tareas del curso (US-004)
-      operationId: listAssignments
+      summary: Listar tareas del curso
+      operationId: listCourseAssignments
       parameters:
         - $ref: '#/components/parameters/CourseId'
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [pending, overdue, all]
-            default: pending
       responses:
         '200':
           description: Lista de tareas
@@ -259,22 +432,93 @@ paths:
                 items:
                   $ref: '#/components/schemas/Assignment'
 
+  /assignments/{assignmentId}/submissions:
+    get:
+      tags: [Submissions]
+      summary: Panel de entregas de la tarea (US-027)
+      operationId: listAssignmentSubmissions
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pendiente, entregada, entregada_tarde, calificada, all]
+      responses:
+        '200':
+          description: Entregas con resumen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionPanelResponse'
+
+    post:
+      tags: [Submissions]
+      summary: Alumno entrega tarea (US-025)
+      operationId: submitAssignment
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubmissionRequest'
+      responses:
+        '201':
+          description: Entrega registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /submissions/{submissionId}/grade:
+    patch:
+      tags: [Submissions]
+      summary: Profesor califica entrega (US-026)
+      operationId: gradeSubmission
+      parameters:
+        - $ref: '#/components/parameters/SubmissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeSubmissionRequest'
+      responses:
+        '200':
+          description: Entrega calificada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Submission'
+
   /students/{studentId}/assignments:
     get:
       tags: [Assignments]
-      summary: Agenda de tareas del alumno (US-004)
+      summary: Tareas del alumno con estado (US-004, US-028)
       operationId: listStudentAssignments
       parameters:
         - $ref: '#/components/parameters/StudentId'
+        - name: tab
+          in: query
+          schema:
+            type: string
+            enum: [pendientes, entregadas, calificadas, all]
+            default: all
       responses:
         '200':
-          description: Tareas del alumno ordenadas por fecha
+          description: Tareas con estado de entrega
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Assignment'
+                  $ref: '#/components/schemas/StudentAssignmentView'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /discipline:
     post:
@@ -855,6 +1099,34 @@ components:
       schema:
         type: string
         format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TeacherId:
+      name: teacherId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SubmissionId:
+      name: submissionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
 
   responses:
     BadRequest:
@@ -932,7 +1204,7 @@ components:
           format: uuid
         role:
           type: string
-          enum: [admin, teacher, parent, treasurer]
+          enum: [admin, director, teacher, student, parent]
         first_name:
           type: string
         last_name:
@@ -940,6 +1212,138 @@ components:
         school_id:
           type: string
           format: uuid
+        student_id:
+          type: string
+          format: uuid
+          description: Solo presente cuando role=student
+
+    CreateUserRequest:
+      type: object
+      required: [email, password, first_name, last_name, role]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, director, teacher, student, parent]
+        student_id:
+          type: string
+          format: uuid
+          description: Requerido si role=student
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        is_active:
+          type: boolean
+        password:
+          type: string
+
+    SchoolModule:
+      type: object
+      properties:
+        module_code:
+          type: string
+          example: assignments
+        is_enabled:
+          type: boolean
+
+    UpdateModuleRequest:
+      type: object
+      required: [module_code, is_enabled]
+      properties:
+        module_code:
+          type: string
+        is_enabled:
+          type: boolean
+
+    AssignTeacherRequest:
+      type: object
+      required: [teacher_id, course_id, subject]
+      properties:
+        teacher_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+
+    TeacherReport:
+      type: object
+      properties:
+        teacher_id:
+          type: string
+          format: uuid
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        assignments_published:
+          type: integer
+        submissions_received:
+          type: integer
+        submissions_graded:
+          type: integer
+        submissions_pending:
+          type: integer
+        attendance_days_complete:
+          type: integer
+        attendance_days_incomplete:
+          type: integer
+
+    ParentDashboard:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        attendance_summary:
+          type: object
+          properties:
+            presente:
+              type: integer
+            tarde:
+              type: integer
+            ausente:
+              type: integer
+        assignments_summary:
+          type: object
+          properties:
+            pendientes:
+              type: integer
+            entregadas:
+              type: integer
+            calificadas:
+              type: integer
+        grades_average:
+          type: number
+          nullable: true
+        discipline_summary:
+          type: object
+          properties:
+            incidentes:
+              type: integer
+            felicitaciones:
+              type: integer
 
     Student:
       type: object
@@ -1064,15 +1468,24 @@ components:
 
     CreateAssignmentRequest:
       type: object
-      required: [title, due_date]
+      required: [title, subject, due_at, instructions]
       properties:
         title:
           type: string
-        description:
+        subject:
           type: string
-        due_date:
+          example: Matemáticas
+        instructions:
           type: string
-          format: date
+        due_at:
+          type: string
+          format: date-time
+        allow_resubmit:
+          type: boolean
+          default: false
+        max_score:
+          type: number
+          default: 100
         attachment_ids:
           type: array
           items:
@@ -1088,13 +1501,15 @@ components:
         course_id:
           type: string
           format: uuid
+        subject:
+          type: string
         title:
           type: string
-        description:
+        instructions:
           type: string
-        due_date:
+        due_at:
           type: string
-          format: date
+          format: date-time
         attachments:
           type: array
           items:
@@ -1104,8 +1519,102 @@ components:
                 type: string
               filename:
                 type: string
-        is_overdue:
+        allow_resubmit:
           type: boolean
+        max_score:
+          type: number
+        status:
+          type: string
+          enum: [borrador, publicada, cerrada]
+
+    CreateSubmissionRequest:
+      type: object
+      properties:
+        content_text:
+          type: string
+        attachment_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Submission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assignment_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pendiente, entregada, entregada_tarde, calificada, devuelta]
+        content_text:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: object
+        submitted_at:
+          type: string
+          format: date-time
+        score:
+          type: number
+        feedback:
+          type: string
+        version:
+          type: integer
+
+    GradeSubmissionRequest:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: number
+          minimum: 0
+        feedback:
+          type: string
+
+    SubmissionPanelResponse:
+      type: object
+      properties:
+        assignment_id:
+          type: string
+          format: uuid
+        summary:
+          type: object
+          properties:
+            total_students:
+              type: integer
+            entregadas:
+              type: integer
+            entregadas_tarde:
+              type: integer
+            pendientes:
+              type: integer
+            calificadas:
+              type: integer
+        submissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Submission'
+
+    StudentAssignmentView:
+      allOf:
+        - $ref: '#/components/schemas/Assignment'
+        - type: object
+          properties:
+            submission_status:
+              type: string
+              enum: [pendiente, entregada, entregada_tarde, calificada, devuelta]
+            score:
+              type: number
+            feedback:
+              type: string
 
     CreateDisciplineRequest:
       type: object

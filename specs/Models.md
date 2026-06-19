@@ -9,9 +9,24 @@
 ```typescript
 enum UserRole {
   ADMIN = 'admin',
+  DIRECTOR = 'director',
   TEACHER = 'teacher',
+  STUDENT = 'student',
   PARENT = 'parent',
-  TREASURER = 'treasurer',
+}
+
+enum SubmissionStatus {
+  PENDING = 'pendiente',
+  SUBMITTED = 'entregada',
+  LATE = 'entregada_tarde',
+  GRADED = 'calificada',
+  RETURNED = 'devuelta',
+}
+
+enum AssignmentStatus {
+  DRAFT = 'borrador',
+  PUBLISHED = 'publicada',
+  CLOSED = 'cerrada',
 }
 
 enum AttendanceStatus {
@@ -101,13 +116,17 @@ enum GuardianRelationship {
 | password_hash | string | |
 | first_name | string | |
 | last_name | string | |
-| role | UserRole | |
+| role | UserRole | admin, director, teacher, student, parent |
 | phone | string? | No expuesto en chat |
 | fcm_token | string? | Push notifications |
+| student_id | UUID? | FK → Student (solo rol student) |
 | is_active | boolean | |
 | created_at | datetime | |
 
-**Relaciones:** Teacher → Course (M:N), Parent → Student (M:N via Guardian)
+**Relaciones:**
+- Teacher → Course (M:N via course_teachers)
+- Parent → Student (M:N via guardians)
+- Student user → Student entity (1:1 via student_id)
 
 ---
 
@@ -182,18 +201,93 @@ enum GuardianRelationship {
 
 ---
 
-### 2.8 Assignment — US-003, US-004
+### 2.8 Assignment — US-003 (Moodle)
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | id | UUID | PK |
 | course_id | UUID | FK |
 | teacher_id | UUID | FK |
+| subject | string | Materia (ej. Matemáticas) |
 | title | string | |
-| description | text | |
-| due_date | date | Obligatorio |
-| attachments | JSONB | `[{url, filename, mime_type}]` |
+| instructions | text | Instrucciones detalladas |
+| due_at | datetime | Fecha límite con hora |
+| attachments | JSONB | Material del profesor |
+| allow_resubmit | boolean | Permitir reenvíos |
+| max_score | decimal | Puntaje máximo (default 100) |
+| status | AssignmentStatus | borrador / publicada / cerrada |
 | created_at | datetime | |
+
+---
+
+### 2.8b AssignmentSubmission — US-025, US-026, US-027
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | UUID | PK |
+| assignment_id | UUID | FK |
+| student_id | UUID | FK |
+| status | SubmissionStatus | pendiente → entregada → calificada |
+| content_text | text? | Entrega en texto |
+| attachments | JSONB | Archivos entregados |
+| submitted_at | datetime? | |
+| score | decimal? | Nota asignada |
+| feedback | text? | Retroalimentación del profesor |
+| graded_by | UUID? | FK → User (teacher) |
+| graded_at | datetime? | |
+| version | integer | Versión (reenvíos) |
+| created_at | datetime | |
+
+**Reglas:**
+- `submitted_at > assignment.due_at` → status = `entregada_tarde`
+- Solo rol `student` puede crear submission
+- Padre solo lectura vía dashboard
+
+---
+
+### 2.8c ParentDashboard — US-029
+
+DTO agregado (no tabla):
+
+```typescript
+interface ParentDashboard {
+  student_id: UUID;
+  attendance_summary: { presente: number; tarde: number; ausente: number };
+  assignments_summary: { pendientes: number; entregadas: number; calificadas: number };
+  grades_average: number | null;
+  discipline_summary: { incidentes: number; felicitaciones: number };
+}
+```
+
+---
+
+### 2.8d SchoolModule — US-022
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| school_id | UUID | FK |
+| module_code | string | assignments, payments, chat, etc. |
+| is_enabled | boolean | |
+| updated_at | datetime | |
+
+---
+
+### 2.8e TeacherReport — US-024
+
+DTO agregado para director:
+
+```typescript
+interface TeacherReport {
+  teacher_id: UUID;
+  period: { from: date; to: date };
+  assignments_published: number;
+  submissions_received: number;
+  submissions_graded: number;
+  submissions_pending: number;
+  attendance_days_complete: number;
+  attendance_days_incomplete: number;
+}
+```
 
 ---
 

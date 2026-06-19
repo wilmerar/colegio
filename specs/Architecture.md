@@ -2,257 +2,403 @@
 
 ## 1. Visión del producto
 
-App **mobile-first** de comunicación escuela–familia para colegios en El Alto y Latinoamérica. Prioriza el **uso diario** (asistencia, tareas, chat, comunicados) sobre un ERP completo. Se inspira en plataformas como Phidias, MyEncore y QuickSchools, pero con alcance acotado y costo operativo bajo (modelo SaaS por alumno).
+Plataforma **web + móvil** centrada en:
 
-### Diferenciadores vs. competencia
+1. **Control del alumno por padres de familia** — dashboard unificado (asistencia, tareas, notas, disciplina).
+2. **Gestión de tareas estilo [Moodle](https://moodle.org/)** — publicar, entregar, calificar, feedback.
+3. **Jerarquía escolar clara** — Administrador → Director → Profesor → Alumno/Padre.
 
-| Aspecto | Competidores típicos | Nuestra app |
-|---------|---------------------|-------------|
-| Enfoque | ERP/SIS completo | Comunicación y seguimiento diario |
-| Chat | Email/SMS o portal | Chat in-app sin exponer teléfonos |
-| Firma | Papel o módulos enterprise | Firma digital simple en pantalla |
-| Precio | $1–15 USD/alumno/mes | Objetivo: plan accesible por volumen |
-| Región | Global / genérico | Adaptado a El Alto (BOB, normativa local) |
+### Clientes oficiales
+
+| Cliente | Stack | Roles |
+|---------|-------|-------|
+| **Portal Web** | Next.js 14 + TypeScript | Admin, Director, Profesor, Padre, Alumno |
+| **App Móvil** | React Native + TypeScript (Expo) | Profesor, Padre, Alumno |
+
+> Una sola **API REST** (`Openapi.yml`) sirve a web y móvil. TypeScript en las tres capas (backend, web, móvil).
+
+### Distribución web vs móvil por rol
+
+| Rol | Web | Móvil | Razón |
+|-----|:---:|:-----:|-------|
+| Administrador | ✓ | — | Gestión compleja; solo escritorio |
+| Director | ✓ | — | Reportes, tablas, export PDF |
+| Profesor | ✓ | ✓ | Web: panel entregas; móvil: asistencia rápida en aula |
+| Alumno | ✓ | ✓ | Móvil: entregar tareas con cámara; web: vista cómoda |
+| Padre | ✓ | ✓ | **Móvil principal** — push y monitoreo diario |
 
 ---
 
-## 2. Principios arquitectónicos
+## 2. Jerarquía de roles
 
-1. **Spec-Driven Development (SDD):** Las user stories en Gherkin son la fuente de verdad; API, modelos y tests se derivan de `Userstories.md`.
-2. **Multi-tenant por colegio:** Cada institución es un tenant aislado (`school_id` en todas las entidades).
-3. **API-first:** Cliente móvil (React Native / Flutter) y portal web admin consumen la misma REST API (`Openapi.yml`).
-4. **Event-driven para notificaciones:** Cambios de asistencia, tareas, pagos, etc. publican eventos que un worker de notificaciones procesa (push, email opcional).
-5. **Seguridad por rol (RBAC):** Padre solo ve sus hijos; docente solo sus cursos; admin ve todo el tenant.
-6. **Offline-tolerant (fase 2):** Marcado de asistencia con sync diferido en zonas de conectividad limitada.
+```mermaid
+flowchart TB
+  ADMIN[Administrador<br/>Usuarios + Módulos + Todo]
+  DIRECTOR[Director<br/>Profesores + Reportes]
+  TEACHER[Profesor<br/>Tareas + Control alumnos]
+  STUDENT[Alumno<br/>Entregas + Consulta]
+  PARENT[Padre<br/>Monitoreo del hijo]
+
+  ADMIN --> DIRECTOR
+  ADMIN --> TEACHER
+  DIRECTOR --> TEACHER
+  TEACHER --> STUDENT
+  TEACHER --> PARENT
+  STUDENT -.->|vinculado| PARENT
+```
+
+| Rol | Código | Acceso |
+|-----|--------|--------|
+| Administrador | `admin` | Total del tenant |
+| Director | `director` | Profesores, reportes, comunicados |
+| Profesor | `teacher` | Sus cursos: tareas, asistencia, disciplina, calificaciones |
+| Alumno | `student` | Propio: tareas, entregas, asistencia, notas |
+| Padre | `parent` | Hijo(s) vinculados: monitoreo, sin entregas |
 
 ---
 
-## 3. Diagrama de contexto (C4 — Nivel 1)
+## 3. Principios arquitectónicos
+
+1. **SDD:** User stories Gherkin → Models → Database → OpenAPI → código.
+2. **Multi-tenant:** Aislamiento por `school_id`.
+3. **API-first, multi-cliente:** Next.js (web) + React Native (móvil) → misma API NestJS.
+4. **TypeScript end-to-end:** Tipos generados desde `Openapi.yml` compartidos en web y móvil.
+4. **LMS módulo central:** Tareas con ciclo Moodle (publish → submit → grade → notify).
+5. **RBAC estricto:** Middleware de rol + ownership (padre→hijo, profesor→curso).
+6. **Event-driven:** Notificaciones push/email vía cola async.
+
+---
+
+## 4. Diagrama de contexto
 
 ```mermaid
 C4Context
-  title Contexto del sistema — App de Colegios
+  title App Colegios — Web + Móvil
 
-  Person(padre, "Padre/Madre", "Consulta asistencia, tareas, paga pensiones")
-  Person(docente, "Docente", "Marca asistencia, publica tareas, chat")
-  Person(admin, "Administrador", "Gestiona colegio, comunicados, pagos")
+  Person(admin, "Administrador", "Usuarios y módulos")
+  Person(director, "Director", "Profesores y reportes")
+  Person(teacher, "Profesor", "Tareas Moodle, control alumnos")
+  Person(student, "Alumno", "Entrega tareas")
+  Person(parent, "Padre", "Monitorea hijo")
 
-  System(app, "App Colegios", "API + apps móvil/web")
-  System_Ext(fcm, "Firebase FCM", "Push notifications")
-  System_Ext(payment, "Pasarela QR / Banco", "Pagos pensiones")
-  System_Ext(storage, "Object Storage", "Adjuntos, fotos, firmas")
+  System(app, "App Colegios", "API + Web + Móvil")
+  System_Ext(fcm, "Firebase FCM", "Push")
+  System_Ext(storage, "Object Storage", "Entregas y adjuntos")
 
-  Rel(padre, app, "Usa")
-  Rel(docente, app, "Usa")
-  Rel(admin, app, "Administra")
-  Rel(app, fcm, "Envía push")
-  Rel(app, payment, "Genera QR / confirma pago")
-  Rel(app, storage, "Almacena archivos")
+  Rel(admin, app, "Web")
+  Rel(director, app, "Web")
+  Rel(teacher, app, "Web + Móvil")
+  Rel(student, app, "Web + Móvil")
+  Rel(parent, app, "Móvil + Web")
+  Rel(app, fcm, "Push")
+  Rel(app, storage, "Archivos")
 ```
 
 ---
 
-## 4. Diagrama de contenedores (C4 — Nivel 2)
+## 5. Diagrama de contenedores
 
 ```mermaid
 flowchart TB
   subgraph clients [Clientes]
-    MOBILE[App Móvil<br/>React Native / Flutter]
-    WEB[Portal Web Admin<br/>React / Next.js]
+    WEB[Portal Web<br/>Next.js + TypeScript]
+    MOBILE[App Móvil<br/>React Native + Expo]
   end
 
-  subgraph backend [Backend]
-    API[API REST<br/>Node.js / NestJS o Go]
-    WORKER[Notification Worker<br/>Cola de eventos]
-    AUTH[Auth Service<br/>JWT + refresh tokens]
+  subgraph backend [Backend Node.js]
+    API[API REST<br/>NestJS + TypeScript]
+    WORKER[Notification Worker]
   end
 
   subgraph data [Datos]
-    PG[(PostgreSQL<br/>Datos transaccionales)]
-    REDIS[(Redis<br/>Cache + colas)]
-    S3[(S3 / MinIO<br/>Archivos)]
+    PG[(PostgreSQL)]
+    REDIS[(Redis)]
+    S3[(MinIO/S3)]
   end
 
-  subgraph external [Externos]
-    FCM[Firebase Cloud Messaging]
-    PAY[Pasarela de pagos QR]
-  end
-
-  MOBILE --> API
   WEB --> API
-  API --> AUTH
+  MOBILE --> API
   API --> PG
   API --> REDIS
   API --> S3
-  API --> PAY
-  API -->|publica eventos| REDIS
   REDIS --> WORKER
-  WORKER --> FCM
   WORKER --> PG
 ```
 
 ---
 
-## 5. Stack tecnológico recomendado
+## 6. Módulo LMS (estilo Moodle)
 
-| Capa | Tecnología | Justificación |
-|------|------------|---------------|
-| API | **NestJS + TypeScript** | OpenAPI nativo, módulos por dominio, ecosistema maduro |
-| Base de datos | **PostgreSQL 16** | Relacional, JSONB para metadatos, RLS para multi-tenant |
-| Cache/Colas | **Redis + BullMQ** | Notificaciones async, rate limiting |
-| Storage | **MinIO / AWS S3** | Adjuntos, galería, imágenes de firma |
-| Auth | **JWT + refresh token** | Stateless, compatible con móvil |
-| Push | **Firebase FCM** | Estándar Android/iOS |
-| Móvil | **Flutter** | Un codebase, buen rendimiento offline futuro |
-| Web admin | **Next.js** | SSR, dashboard administrativo |
-| Infra | **Docker + VPS / Railway** | Costo bajo para MVP; migrar a K8s si escala |
+```
+assignments/
+├── create          # Profesor publica tarea (US-003)
+├── list            # Alumno/padre/profesor listan
+├── submissions/
+│   ├── submit      # Alumno entrega (US-025)
+│   ├── grade       # Profesor califica (US-026)
+│   └── panel       # Panel entregas (US-027)
+└── notifications   # Push a alumno y padre
+```
+
+### Estados de entrega (Submission)
+
+```
+pendiente → entregada | entregada_tarde → calificada
+                                      ↘ devuelta (rehacer)
+```
 
 ---
 
-## 6. Módulos de dominio (bounded contexts)
+## 7. Módulos de dominio
 
 ```
 src/
-├── auth/           # US-020: login, tokens, roles
-├── schools/        # Multi-tenant, configuración colegio
-├── users/          # Padres, docentes, admins
-├── students/       # Alumnos, vinculación padre-alumno (US-021)
-├── attendance/     # US-001, US-002, US-014
-├── assignments/    # US-003, US-004
-├── discipline/     # US-005, US-006
-├── announcements/  # US-007, US-008
-├── calendar/       # US-009
-├── messaging/      # US-010, US-011
-├── payments/       # US-012
-├── grades/         # US-013
-├── galleries/      # US-015
-├── directory/      # US-016
-├── polls/          # US-017
-├── signatures/     # US-018, US-019
-└── notifications/  # Worker transversal
-```
-
-Cada módulo expone:
-- Controller (REST)
-- Service (lógica de negocio)
-- Repository (acceso a DB)
-- DTOs alineados con `Openapi.yml`
-
----
-
-## 7. Modelo de despliegue (MVP)
-
-```
-                    ┌─────────────────┐
-                    │  CDN / Nginx    │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-        ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
-        │ API x2    │  │ Worker x1 │  │ PostgreSQL│
-        │ (stateless│  │           │  │ + Redis   │
-        └───────────┘  └───────────┘  └───────────┘
-```
-
-- **Entorno dev:** Docker Compose local (API + PG + Redis + MinIO).
-- **Entorno prod:** 1 VPS (4 vCPU, 8 GB RAM) soporta ~2.000 alumnos activos en MVP.
-- **Escalado horizontal:** API stateless detrás de load balancer cuando >5 colegios grandes.
-
----
-
-## 8. Seguridad
-
-| Control | Implementación |
-|---------|----------------|
-| Autenticación | JWT (15 min) + refresh token (7 días) en httpOnly cookie (web) o secure storage (móvil) |
-| Autorización | RBAC: `admin`, `teacher`, `parent`, `treasurer` |
-| Multi-tenant | Middleware inyecta `school_id` desde token; queries filtradas |
-| Datos sensibles | Contraseñas bcrypt; firmas e IPs en tabla audit |
-| Chat | Sin PII de teléfono; logs auditables solo por admin con motivo |
-| Archivos | URLs firmadas temporales (presigned S3) |
-| API | Rate limit 100 req/min por usuario; HTTPS obligatorio |
-
----
-
-## 9. Integraciones externas
-
-### 9.1 Notificaciones push (FCM)
-
-Eventos que disparan push:
-- Entrada / tarde / ausencia / salida
-- Nueva tarea, comunicado, calificación
-- Mensaje de chat
-- Recordatorio de pago
-- Solicitud de firma pendiente
-
-### 9.2 Pagos QR (fase Should)
-
-- Generación de QR con referencia única (`PAY-{year}-{month}-{studentRef}`)
-- Integración inicial: QR estático con datos bancarios + referencia (sin pasarela)
-- Fase 2: API bancaria o wallet local (evaluar normativa Bolivia)
-
-### 9.3 Almacenamiento de archivos
-
-- Tareas: PDF, imágenes (max 10 MB)
-- Galería: imágenes (max 5 MB c/u)
-- Firmas: PNG desde canvas (max 500 KB)
-
----
-
-## 10. Flujos críticos
-
-### 10.1 Asistencia con notificación
-
-```
-Docente → POST /attendance → Validar curso/alumno
-  → Persistir registro → Publicar evento AttendanceRecorded
-  → Worker → FCM → Padre recibe push
-```
-
-### 10.2 Firma digital
-
-```
-Admin/Docente → POST /signatures/requests → Padre recibe push
-  → Padre dibuja firma → POST /signatures/{id}/sign
-  → Guardar imagen + audit → Notificar docente
-```
-
-### 10.3 Chat seguro
-
-```
-Padre → POST /messages (validar relación curso)
-  → Persistir mensaje → WebSocket/polling → Docente
-  → Sin exponer teléfono; thread_id por par padre-docente-curso
+├── auth/              # US-020 Login web/móvil
+├── admin/             # US-022 Usuarios y módulos
+├── director/          # US-023, US-024 Profesores y reportes
+├── users/
+├── students/
+├── guardians/         # US-021 Vinculación padre-alumno
+├── assignments/       # US-003–028 LMS Moodle
+├── submissions/       # Entregas de alumnos
+├── parent-dashboard/  # US-029 Panel control parental
+├── attendance/        # US-001, US-002
+├── discipline/        # US-005, US-006
+├── grades/            # US-013
+├── announcements/
+├── signatures/
+└── notifications/
 ```
 
 ---
 
-## 11. Roadmap por fases
+## 8. Stack tecnológico oficial
 
-| Fase | Alcance | User Stories |
-|------|---------|--------------|
-| **MVP** | Auth, asistencia, tareas, disciplina, comunicados, chat, firma | US-001–011, US-018–021 |
-| **v1.1** | Calendario, calificaciones, salida segura | US-009, US-013, US-014 |
-| **v1.2** | Pagos QR, galería, directorio | US-012, US-015, US-016 |
-| **v1.3** | Encuestas, offline sync, reportes admin | US-017 + mejoras |
+| Capa | Tecnología | Notas |
+|------|------------|-------|
+| **Backend** | Node.js + **NestJS** + TypeScript | API REST, RBAC, multi-tenant |
+| **Web** | **Next.js 14** (App Router) + TypeScript | Un portal con layouts por rol |
+| **Móvil** | **React Native** + TypeScript + **Expo** | iOS + Android, un codebase |
+| DB | PostgreSQL 16 | |
+| Cache/Colas | Redis + BullMQ | Notificaciones async |
+| Storage | MinIO / S3 | Entregas, adjuntos, firmas |
+| Auth | JWT + refresh token | Secure storage en móvil |
+| Push | Firebase FCM | `@react-native-firebase/messaging` o Expo Notifications |
+| API Spec | OpenAPI 3.1 | Generación de cliente con `openapi-typescript` |
+| Monorepo (opcional) | Turborepo o pnpm workspaces | `apps/api`, `apps/web`, `apps/mobile`, `packages/shared` |
+
+### Por qué React Native (decisión registrada)
+
+- Un solo codebase para Android e iOS.
+- Mismo lenguaje (TypeScript) que NestJS y Next.js.
+- Funcionalidades clave cubiertas: push, cámara, adjuntos, firma en canvas.
+- MVP más rápido que Kotlin + Swift por separado.
+
+### Estructura de repositorio propuesta
+
+```
+colegio/
+├── apps/
+│   ├── api/                 # NestJS (Node.js)
+│   ├── web/                 # Next.js — portal único, rutas por rol
+│   └── mobile/              # React Native + Expo
+├── packages/
+│   ├── shared/              # Tipos, validadores, constantes
+│   └── api-client/          # Cliente generado desde Openapi.yml
+└── specs/                   # SDD (este proyecto)
+```
+
+### Web — Next.js: layouts por rol
+
+```
+app/
+├── (auth)/login/
+├── (admin)/          # Solo rol admin
+│   ├── users/
+│   └── modules/
+├── (director)/       # Solo rol director
+│   ├── teachers/
+│   └── reports/
+├── (teacher)/        # Rol teacher
+│   ├── assignments/
+│   ├── submissions/  # Panel entregas Moodle
+│   └── attendance/
+└── (family)/         # Padre + alumno
+    ├── dashboard/    # Panel control (padre)
+    ├── assignments/  # Lista y detalle tareas
+    └── submit/       # Entrega (alumno)
+```
+
+### Móvil — React Native: navegación por rol
+
+Tras login, redirigir según `user.role`:
+
+```
+MobileNavigator
+├── TeacherStack     # Profesor
+├── StudentStack     # Alumno
+└── ParentStack      # Padre
+```
+
+Admin y director **no tienen app móvil** — se les muestra mensaje para usar el portal web.
 
 ---
 
-## 12. Decisiones arquitectónicas (ADRs resumidos)
+## 9. Matriz de pantallas por rol y plataforma
 
-| ID | Decisión | Alternativa descartada | Razón |
-|----|----------|------------------------|-------|
-| ADR-001 | PostgreSQL monolito modular | Microservicios | MVP más simple, un equipo |
-| ADR-002 | REST + OpenAPI | GraphQL | Clientes móviles, cache CDN, spec clara |
-| ADR-003 | Eventos async para notificaciones | Sync en request | Latencia baja en API; FCM puede fallar |
-| ADR-004 | Multi-tenant lógico (school_id) | DB por colegio | Costo operativo menor hasta >50 colegios |
-| ADR-005 | Gherkin en specs, no en repo de tests aún | Cucumber desde día 1 | Specs primero; tests E2E en fase MVP |
+Leyenda: **W** = Web (Next.js) · **M** = Móvil (React Native) · **—** = no disponible
+
+### Administrador (solo Web)
+
+| Pantalla | W | M | User Story |
+|----------|:-:|:-:|------------|
+| Login | ✓ | — | US-020 |
+| Gestión de usuarios (CRUD) | ✓ | — | US-022 |
+| Activar/desactivar módulos | ✓ | — | US-022 |
+| Vincular padre ↔ alumno | ✓ | — | US-021 |
+| Configuración del colegio | ✓ | — | US-022 |
+| Vista de todos los módulos | ✓ | — | — |
+
+### Director (solo Web)
+
+| Pantalla | W | M | User Story |
+|----------|:-:|:-:|------------|
+| Login | ✓ | — | US-020 |
+| Listado de profesores | ✓ | — | US-023 |
+| Asignar profesor → curso/materia | ✓ | — | US-023 |
+| Reportes por profesor | ✓ | — | US-024 |
+| Exportar reporte PDF | ✓ | — | US-024 |
+| Comunicados oficiales | ✓ | — | US-007 |
+| Dashboard resumen colegio | ✓ | — | — |
+
+### Profesor (Web + Móvil)
+
+| Pantalla | W | M | User Story | Notas |
+|----------|:-:|:-:|------------|-------|
+| Login | ✓ | ✓ | US-020 | |
+| Publicar tarea (Moodle) | ✓ | ✓ | US-003 | Web: formulario completo; móvil: versión simplificada |
+| Panel de entregas | ✓ | M* | US-027 | *Móvil: resumen; web: tabla completa |
+| Calificar entrega + feedback | ✓ | ✓ | US-026 | |
+| Marcar asistencia | ✓ | ✓ | US-001 | **Móvil prioritario** en aula |
+| Historial asistencia curso | ✓ | — | US-002 | |
+| Cuaderno disciplina | ✓ | ✓ | US-005, US-006 | |
+| Publicar calificaciones | ✓ | — | US-013 | |
+| Solicitar firma digital | ✓ | ✓ | US-018 | |
+| Chat con padres | — | ✓ | US-010 | Fase v1.2; móvil first |
+
+### Alumno (Web + Móvil)
+
+| Pantalla | W | M | User Story | Notas |
+|----------|:-:|:-:|------------|-------|
+| Login | ✓ | ✓ | US-020 | |
+| Mis tareas (pendientes/entregadas/calificadas) | ✓ | ✓ | US-028 | |
+| Detalle de tarea + instrucciones | ✓ | ✓ | US-028 | |
+| **Entregar tarea** (archivo/foto) | ✓ | ✓ | US-025 | **Móvil prioritario** — cámara |
+| Ver calificación y feedback | ✓ | ✓ | US-026 | |
+| Mi asistencia | ✓ | ✓ | US-002 | |
+| Mis calificaciones | ✓ | ✓ | US-013 | |
+| Comunicados | ✓ | ✓ | US-008 | |
+| Calendario escolar | ✓ | ✓ | US-009 | |
+
+### Padre de familia (Web + Móvil)
+
+| Pantalla | W | M | User Story | Notas |
+|----------|:-:|:-:|------------|-------|
+| Login | ✓ | ✓ | US-020 | |
+| **Panel de control del hijo** | ✓ | ✓ | US-029 | **Móvil = pantalla principal** |
+| Tareas del hijo (solo lectura) | ✓ | ✓ | US-004 | No puede entregar |
+| Asistencia del hijo | ✓ | ✓ | US-002 | Push en móvil |
+| Calificaciones del hijo | ✓ | ✓ | US-013 | |
+| Disciplina del hijo | ✓ | ✓ | US-005 | |
+| **Firma digital** (autorizaciones) | ✓ | ✓ | US-018, US-019 | Canvas táctil en móvil |
+| Comunicados | ✓ | ✓ | US-008 | |
+| Chat con profesor | — | ✓ | US-010 | Fase v1.2 |
+| Pagos / QR pensión | ✓ | ✓ | US-012 | Fase v1.3 |
+
+### Pantallas exclusivas de móvil
+
+| Pantalla | Rol | Motivo |
+|----------|-----|--------|
+| Notificaciones push (centro) | Todos en móvil | FCM nativo |
+| Marcar asistencia rápida en aula | Profesor | Uso en pie, sin laptop |
+| Entregar tarea con cámara | Alumno | Foto directa del cuaderno |
+| Firma en canvas táctil | Padre | Experiencia natural |
+| Salida segura (check-out) | Profesor | Portería / salida del colegio |
+
+### Pantallas exclusivas de web
+
+| Pantalla | Rol | Motivo |
+|----------|-----|--------|
+| CRUD usuarios | Admin | Tablas complejas, muchos campos |
+| Configuración módulos | Admin | Solo administración |
+| Reportes director + export PDF | Director | Pantalla grande, impresión |
+| Panel entregas completo (tabla 30+ alumnos) | Profesor | Calificar legacy desktop |
+| Asignación masiva profesor-curso | Director | Gestión batch |
 
 ---
 
-## 13. Referencias
+## 10. Código compartido (packages/shared)
 
-- Especificaciones: `Userstories.md`, `Models.md`, `Database.md`, `Openapi.yml`
-- Competencia analizada: MyEncore, QuickSchools, Classter, Phidias, DocCF, Clickschool, iSAMS
-- Metodología: BDD (Gherkin) + SDD (specs como contrato)
+Tipos y utilidades reutilizables entre web, móvil y API:
+
+```typescript
+// packages/shared/src/roles.ts
+export const ROLES = ['admin', 'director', 'teacher', 'student', 'parent'] as const;
+
+// packages/shared/src/submission-status.ts
+export type SubmissionStatus = 'pendiente' | 'entregada' | 'entregada_tarde' | 'calificada' | 'devuelta';
+
+// packages/api-client — generado desde specs/Openapi.yml
+```
+
+Generar cliente:
+
+```bash
+npx openapi-typescript specs/Openapi.yml -o packages/api-client/src/schema.ts
+```
+
+---
+
+## 11. Seguridad RBAC
+
+| Endpoint pattern | admin | director | teacher | student | parent |
+|-----------------|:-----:|:--------:|:-------:|:-------:|:------:|
+| `/admin/*` | ✓ | — | — | — | — |
+| `/director/*` | ✓ | ✓ | — | — | — |
+| `/assignments POST` | ✓ | — | ✓* | — | — |
+| `/submissions POST` | — | — | — | ✓* | — |
+| `/parents/dashboard/*` | ✓ | — | — | — | ✓* |
+| `/students/{id}/*` | ✓ | ✓ | ✓* | ✓† | ✓‡ |
+
+\* Solo recursos propios/asignados  
+† Solo `{id}` = propio  
+‡ Solo `{id}` = hijo vinculado
+
+---
+
+## 12. Roadmap frontend
+
+| Fase | Web (Next.js) | Móvil (React Native) |
+|------|---------------|----------------------|
+| **MVP** | Login, admin usuarios, profesor tareas+panel, padre dashboard, alumno entregas | Login padre/profesor/alumno, dashboard padre, entrega tareas, asistencia profesor, push |
+| **v1.1** | Reportes director, calificaciones | Calificaciones, disciplina (consulta padre) |
+| **v1.2** | Comunicados, chat web profesor | Chat, firma digital, comunicados |
+| **v1.3** | Pagos, encuestas | Pagos QR, offline cache tareas |
+
+---
+
+## 13. Roadmap backend + producto
+
+| Fase | Alcance | Stories |
+|------|---------|---------|
+| **MVP** | Auth 5 roles, LMS Moodle, panel padre, asistencia, admin usuarios | US-020–029, US-001–006 |
+| **v1.1** | Reportes director, calificaciones, disciplina avanzada | US-023–024, US-013 |
+| **v1.2** | Comunicados, chat, firma digital | US-007+, US-018 |
+| **v1.3** | Pagos, encuestas, offline móvil | Resto |
+
+---
+
+## 14. Referencias
+
+- [Moodle](https://moodle.org/) — referencia UX para tareas y entregas
+- Specs: `Userstories.md`, `Models.md`, `Database.md`, `Openapi.yml`

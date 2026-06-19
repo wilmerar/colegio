@@ -1,52 +1,55 @@
-# Colegio — App de Comunicación Escuela–Familia
+# Colegio — Control Escolar Web + Móvil
 
-Proyecto **Spec-Driven Development (SDD)** para una aplicación móvil de gestión escolar orientada a colegios en **El Alto, Bolivia** y Latinoamérica.
+Plataforma para colegios en El Alto, centrada en **control parental** y **tareas estilo [Moodle](https://moodle.org/)**.
 
-## Documentación (SDD)
+## Stack oficial
 
-Todos los artefactos de especificación viven en `specs/`:
+| Capa | Tecnología |
+|------|------------|
+| Backend | **Node.js + NestJS** + TypeScript |
+| Web | **Next.js 14** + TypeScript |
+| Móvil | **React Native + Expo** + TypeScript |
+| API | OpenAPI → tipos compartidos |
 
-| Archivo | Descripción |
-|---------|-------------|
-| [Userstories.md](specs/Userstories.md) | 21 user stories con acceptance criteria en **Gherkin (BDD)** |
-| [Architecture.md](specs/Architecture.md) | Arquitectura, stack, módulos y roadmap |
-| [Models.md](specs/Models.md) | Entidades de dominio y DTOs |
-| [Database.md](specs/Database.md) | Esquema PostgreSQL (DDL) |
-| [Openapi.yml](specs/Openapi.yml) | Contrato REST API derivado de user stories |
-| [Testing.md](specs/Testing.md) | Estrategia BDD, pirámide de tests, CI |
-| [DefinitionOfDone.md](specs/DefinitionOfDone.md) | Criterios de done por story/sprint/release |
+## Roles y plataforma
 
-## Flujo SDD
+| Rol | Web | Móvil |
+|-----|:---:|:-----:|
+| Administrador | ✓ | — |
+| Director | ✓ | — |
+| Profesor | ✓ | ✓ |
+| Alumno | ✓ | ✓ |
+| Padre | ✓ | ✓ (principal) |
+
+Detalle de pantallas por rol: [Architecture.md §9](specs/Architecture.md#9-matriz-de-pantallas-por-rol-y-plataforma)
+
+## Documentación SDD
+
+| Archivo | Contenido |
+|---------|-----------|
+| [Userstories.md](specs/Userstories.md) | User stories + Gherkin |
+| [Architecture.md](specs/Architecture.md) | Stack, pantallas web/móvil, monorepo |
+| [Models.md](specs/Models.md) | Entidades y DTOs |
+| [Database.md](specs/Database.md) | PostgreSQL DDL |
+| [Openapi.yml](specs/Openapi.yml) | API REST v0.2 |
+| [Testing.md](specs/Testing.md) | BDD y CI |
+| [DefinitionOfDone.md](specs/DefinitionOfDone.md) | Criterios de done |
+
+## Estructura de repo (propuesta)
 
 ```
-Userstories.md (Gherkin)
-       ↓
-Models.md + Database.md + Openapi.yml
-       ↓
-Implementación + Testing.md
-       ↓
-DefinitionOfDone.md ✓
+colegio/
+├── apps/api/       # NestJS
+├── apps/web/       # Next.js
+├── apps/mobile/    # React Native + Expo
+├── packages/shared/
+└── specs/
 ```
 
-## Funcionalidades (desde spec PDF)
+## MVP
 
-**Principales (Must):** Asistencia con notificación, agenda de tareas, cuaderno de disciplina, comunicados, calendario, chat seguro, firma digital.
-
-**Secundarias (Should/Could):** Pagos QR, calificaciones, salida segura, galería, directorio, encuestas.
-
-## Posicionamiento vs. competencia
-
-Analizadas: MyEncore, QuickSchools, Classter, Phidias, DocCF, Clickschool, iSAMS.
-
-Este producto **no compite como ERP completo** sino como app de **comunicación diaria** con:
-- Chat in-app sin exponer teléfonos personales
-- Firma digital simple (adaptada a El Alto)
-- Notificaciones push de asistencia/salida en tiempo real
-- Modelo SaaS accesible por alumno (objetivo: plan competitivo vs. $1–15 USD/alumno/mes del mercado)
-
-## Próximos pasos
-
-1. Validar user stories Must con stakeholders del colegio piloto
-2. Implementar MVP (fase 1 en Architecture.md): auth, asistencia, tareas, disciplina, comunicados, chat, firma
-3. Generar proyecto NestJS desde `Openapi.yml` (openapi-generator)
-4. Configurar Cucumber con features de `Userstories.md`
+- Auth 5 roles
+- LMS Moodle (publicar → entregar → calificar)
+- Panel de control parental (móvil first)
+- Asistencia con push
+- Admin usuarios (solo web)
